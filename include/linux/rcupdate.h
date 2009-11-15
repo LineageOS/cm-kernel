@@ -73,6 +73,8 @@ extern void rcu_scheduler_starting(void);
 #include <linux/rcutree.h>
 #elif defined(CONFIG_TINY_RCU)
 #include <linux/rcutiny.h>
+#elif defined(CONFIG_CLASSIC_RCU)
+#include <linux/rcuclassic.h>
 #else
 #error "Unknown RCU implementation specified to kernel configuration"
 #endif
