@@ -28,7 +28,7 @@
 
 static DEFINE_MUTEX(clocks_mutex);
 static DEFINE_SPINLOCK(clocks_lock);
-static HLIST_HEAD(clocks);
+static LIST_HEAD(clocks);
 
 /*
  * glue for the proc_comm interface
@@ -91,15 +91,14 @@ static inline int pc_pll_request(unsigned id, unsigned on)
 struct clk *clk_get(struct device *dev, const char *id)
 {
 	struct clk *clk;
-	struct hlist_node *pos;
 
 	mutex_lock(&clocks_mutex);
 
-	hlist_for_each_entry(clk, pos, &clocks, list)
+	list_for_each_entry(clk, &clocks, list)
 		if (!strcmp(id, clk->name) && clk->dev == dev)
 			goto found_it;
 
-	hlist_for_each_entry(clk, pos, &clocks, list)
+	list_for_each_entry(clk, &clocks, list)
 		if (!strcmp(id, clk->name) && clk->dev == NULL)
 			goto found_it;
 
@@ -187,13 +186,6 @@ int clk_set_flags(struct clk *clk, unsigned long flags)
 }
 EXPORT_SYMBOL(clk_set_flags);
 
-void clk_enter_sleep(int from_idle)
-{
-}
-
-void clk_exit_sleep(void)
-{
-}
 
 void __init msm_clock_init(void)
 {
@@ -201,9 +193,9 @@ void __init msm_clock_init(void)
 
 	spin_lock_init(&clocks_lock);
 	mutex_lock(&clocks_mutex);
-	for (clk = msm_clocks; clk && clk->name; clk++)
-		hlist_add_head(&clk->list, &clocks);
-
+	for (clk = msm_clocks; clk && clk->name; clk++) {
+		list_add_tail(&clk->list, &clocks);
+	}
 	mutex_unlock(&clocks_mutex);
 }
 
@@ -215,11 +207,10 @@ static int __init clock_late_init(void)
 {
 	unsigned long flags;
 	struct clk *clk;
-	struct hlist_node *pos;
 	unsigned count = 0;
 
 	mutex_lock(&clocks_mutex);
-	hlist_for_each_entry(clk, pos, &clocks, list) {
+	list_for_each_entry(clk, &clocks, list) {
 		if (clk->flags & CLKFLAG_AUTO_OFF) {
 			spin_lock_irqsave(&clocks_lock, flags);
 			if (!clk->count) {

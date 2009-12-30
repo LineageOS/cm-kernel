@@ -31,7 +31,7 @@ struct clk {
 	uint32_t count;
 	uint32_t flags;
 	const char *name;
-	struct hlist_node list;
+	struct list_head list;
 	struct device *dev;
 };
 
@@ -91,9 +91,6 @@ struct clk {
 #define NR_CLKS		42
 
 extern struct clk msm_clocks[];
-
-void clk_enter_sleep(int from_idle);
-void clk_exit_sleep(void);
 
 #endif
 

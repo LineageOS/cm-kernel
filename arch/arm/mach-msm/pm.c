@@ -31,7 +31,6 @@
 #include "smd_private.h"
 #include "acpuclock.h"
 #include "proc_comm.h"
-#include "clock.h"
 #ifdef CONFIG_HAS_WAKELOCK
 #include <linux/wakelock.h>
 #endif
@@ -201,7 +200,6 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay, int from_idle)
 		exit_state = 0;
 	}
 
-	clk_enter_sleep(from_idle);
 	msm_irq_enter_sleep1(!!enter_state, from_idle);
 	msm_gpio_enter_sleep(from_idle);
 
@@ -317,7 +315,6 @@ enter_failed:
 	msm_irq_exit_sleep3();
 	msm_gpio_exit_sleep();
 	smd_sleep_exit();
-	clk_exit_sleep();
 	return rv;
 }
 
