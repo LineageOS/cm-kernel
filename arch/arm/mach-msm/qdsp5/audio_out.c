@@ -625,8 +625,7 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 		struct cred *new = prepare_creds();
 		cap_raise(new->cap_effective, CAP_SYS_NICE);
 		commit_creds(new);
-		if ((sched_setscheduler(current, SCHED_RR, &s)) < 0)
-			pr_err("audio: sched_setscheduler failed\n");
+		sched_setscheduler(current, SCHED_RR, &s);
 	}
 
 	mutex_lock(&audio->write_lock);
@@ -670,14 +669,12 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 	/* restore scheduling policy and priority */
 	if (!rt_policy(old_policy)) {
 		struct sched_param v = { .sched_priority = old_prio };
-		if ((sched_setscheduler(current, old_policy, &v)) < 0)
-			pr_err("audio: sched_setscheduler failed\n");
+		sched_setscheduler(current, old_policy, &v);
 		if (likely(!cap_nice)) {
 			struct cred *new = prepare_creds();
 			cap_lower(new->cap_effective, CAP_SYS_NICE);
 			commit_creds(new);
-			if ((sched_setscheduler(current, SCHED_RR, &s)) < 0)
-				pr_err("audio: sched_setscheduler failed\n");
+			sched_setscheduler(current, SCHED_RR, &s);
 		}
 	}
 
