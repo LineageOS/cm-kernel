@@ -453,80 +453,8 @@ static struct platform_device supersonic_rfkill = {
 	.id = -1,
 };
 
-static struct resource qsd_spi_resources[] = {
-	{
-		.name   = "spi_irq_in",
-		.start  = INT_SPI_INPUT,
-		.end    = INT_SPI_INPUT,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_irq_out",
-		.start  = INT_SPI_OUTPUT,
-		.end    = INT_SPI_OUTPUT,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_irq_err",
-		.start  = INT_SPI_ERROR,
-		.end    = INT_SPI_ERROR,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_base",
-		.start  = 0xA1200000,
-		.end    = 0xA1200000 + SZ_4K - 1,
-		.flags  = IORESOURCE_MEM,
-	},
-	{
-		.name   = "spi_clk",
-		.start  = 17,
-		.end    = 1,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_mosi",
-		.start  = 18,
-		.end    = 1,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_miso",
-		.start  = 19,
-		.end    = 1,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_cs0",
-		.start  = 20,
-		.end    = 1,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_pwr",
-		.start  = 21,
-		.end    = 0,
-		.flags  = IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_irq_cs0",
-		.start  = 22,
-		.end    = 0,
-		.flags  = IORESOURCE_IRQ,
-	},
-};
 static struct spi_platform_data supersonic_spi_pdata = {
 	.clk_rate	= 1200000,
-};
-
-static struct platform_device qsd_device_spi = {
-	.name           = "spi_qsd",
-	.id             = 0,
-	.num_resources  = ARRAY_SIZE(qsd_spi_resources),
-	.resource       = qsd_spi_resources,
-	.dev		= {
-		.platform_data = &supersonic_spi_pdata
-	},
 };
 
 static struct resource msm_kgsl_resources[] = {
@@ -921,11 +849,6 @@ static struct i2c_board_info i2c_devices[] = {
 	},
 #endif
 	{
-		I2C_BOARD_INFO("ds2482", 0x30 >> 1),
-		/*.platform_data = &microp_data,*/
-		/*.irq = MSM_GPIO_TO_INT(PASSION_GPIO_UP_INT_N)*/
-	},
-	{
 		I2C_BOARD_INFO("smb329", 0x6E >> 1),
 	},
 	{
@@ -1191,7 +1114,7 @@ static struct platform_device *devices[] __initdata = {
 	&supersonic_flashlight_device,
 	&supersonic_leds,
 #if defined(CONFIG_SPI_QSD)
-	&qsd_device_spi,
+	&msm_device_spi,
 #endif
 };
 
@@ -1353,6 +1276,10 @@ static void __init supersonic_init(void)
 	 * turn off gpu power, and hang it on resume */
 	supersonic_kgsl_power_rail_mode(0);
 	supersonic_kgsl_power(true);
+
+#ifdef CONFIG_SPI_QSD
+	msm_device_spi.dev.platform_data = &supersonic_spi_pdata;
+#endif
 
 	#ifdef CONFIG_SERIAL_MSM_HS
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;

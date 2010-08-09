@@ -221,7 +221,7 @@ static void msm_i2c_interrupt_locked(struct msm_i2c_dev *dev)
 	return;
 
 out_err:
-	dev_err(dev->dev, "error, status %x\n", status);
+	dev_err(dev->dev, "error, status %x (%02X)\n", status, dev->msg->addr);
 	dev->ret = -EIO;
 out_complete:
 	complete(dev->complete);
@@ -286,6 +286,9 @@ msm_i2c_recover_bus_busy(struct msm_i2c_dev *dev)
 		       dev->base + I2C_WRITE_DATA);
 	}
 
+	gpio_request(gpio_clk, "gpio_clk");
+	gpio_request(gpio_dat, "gpio_dat");
+
 	dev_warn(dev->dev, "i2c_scl: %d, i2c_sda: %d\n",
 		 gpio_get_value(gpio_clk), gpio_get_value(gpio_dat));
 
@@ -343,6 +346,7 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 	ret = msm_i2c_poll_notbusy(dev, 1);
 	if (ret) {
+		dev_err(dev->dev, "Still busy in starting xfer(%02X)\n", msgs->addr);
 		ret = msm_i2c_recover_bus_busy(dev);
 		if (ret)
 			goto err;
@@ -371,7 +375,9 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	 */
 
 	timeout = wait_for_completion_timeout(&complete, HZ);
-	msm_i2c_poll_notbusy(dev, 0); /* Read may not have stopped in time */
+	if (msm_i2c_poll_notbusy(dev, 0)) /* Read may not have stopped in time */
+		dev_err(dev->dev, "Still busy after xfer completion (%02X)\n",
+			msgs->addr);
 
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->flush_cnt) {
@@ -394,7 +400,7 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	}
 
 	if (ret < 0) {
-		dev_err(dev->dev, "Error during data xfer (%d)\n", ret);
+		dev_err(dev->dev, "Error during data xfer (%d) @%02X\n", ret, msgs->addr);
 		msm_i2c_recover_bus_busy(dev);
 	}
 err:

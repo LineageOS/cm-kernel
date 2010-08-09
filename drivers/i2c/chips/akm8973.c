@@ -608,6 +608,25 @@ int akm8973_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	}
 	this_client = client;
 
+	if (pdata && pdata->reset) {
+		err = gpio_request(pdata->reset, "akm8973");
+		if (err < 0) {
+			printk(KERN_ERR "%s: request reset gpio failed\n",
+				__func__);
+			goto err_request_reset_gpio;
+		}
+		err = gpio_direction_output(pdata->reset, 1);
+		if (err < 0) {
+			printk(KERN_ERR
+				"%s: request reset gpio failed\n", __func__);
+			goto err_set_reset_gpio;
+		}
+	} else {
+		printk(KERN_ERR "%s: pdata or pdata->reset is NULL\n",
+			__func__);
+		goto err_request_reset_gpio;
+	}
+
 	err = AKECS_PowerDown();
 	if (err < 0) {
 		printk(KERN_ERR"AKM8973 akm8973_probe: set power down mode error\n");
@@ -704,6 +723,9 @@ exit_input_dev_alloc_failed:
 	free_irq(client->irq, akm);
 exit_irq_request_failed:
 exit_set_mode_failed:
+err_set_reset_gpio:
+	gpio_free(pdata->reset);
+err_request_reset_gpio:
 exit_platform_data_null:
 	kfree(akm);
 exit_alloc_data_failed:
@@ -718,6 +740,8 @@ static int akm8973_remove(struct i2c_client *client)
 	free_irq(client->irq, akm);
 	input_unregister_device(akm->input_dev);
 	kfree(akm);
+	if (pdata && pdata->reset)
+		gpio_free(pdata->reset);
 	return 0;
 }
 static const struct i2c_device_id akm8973_id[] = {
