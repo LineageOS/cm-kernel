@@ -627,7 +627,11 @@ static struct resource resources_spi[] = {
 };
 
 struct platform_device msm_device_spi = {
+#if defined(CONFIG_SPI_QSD)
+	.name		= "spi_qsd",
+#else
 	.name		= "msm_spi",
+#endif
 	.id		= 0,
 	.num_resources	= ARRAY_SIZE(resources_spi),
 	.resource	= resources_spi,
