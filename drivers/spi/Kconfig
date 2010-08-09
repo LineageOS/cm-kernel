@@ -172,6 +172,16 @@ config SPI_MPC8xxx
 	  This enables using the Freescale MPC8xxx SPI controllers in master
 	  mode.
 
+config SPI_QSD
+	tristate "QSD SPI support"
+	default n
+	depends on ARCH_QSD8X50
+	help
+	  Support for Serial Peripheral Interface for Qualcomm 8x50
+
+	  This driver can also be built as a module.  If so, the module
+	  will be called spi_qsd.
+
 config SPI_OMAP_UWIRE
 	tristate "OMAP1 MicroWire"
 	depends on ARCH_OMAP1
