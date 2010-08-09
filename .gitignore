@@ -76,3 +76,4 @@ GTAGS
 *.orig
 *~
 \#*#
+arch/arm/boot/compressed
