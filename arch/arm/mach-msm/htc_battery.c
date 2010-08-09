@@ -337,24 +337,32 @@ int htc_cable_status_update(int status)
 
 	if (htc_batt_info.rep.charging_source != last_source) {
 		if (htc_batt_info.rep.charging_source == CHARGER_USB ||
-			htc_batt_info.rep.charging_source == CHARGER_AC) {
-		wake_lock(&vbus_wake_lock);
-	} else {
-		/* give userspace some time to see the uevent and update
-		 * LED state or whatnot...
-		 */
-		wake_lock_timeout(&vbus_wake_lock, 2 * HZ);
-	}
+			  htc_batt_info.rep.charging_source == CHARGER_AC) {
+			wake_lock(&vbus_wake_lock);
+		} else {
+			/* give userspace some time to see the uevent and update
+			 * LED state or whatnot...
+			 */
+			wake_lock_timeout(&vbus_wake_lock, 2 * HZ);
+		}
 		if (htc_batt_info.rep.charging_source == CHARGER_BATTERY || last_source == CHARGER_BATTERY)
-	power_supply_changed(&htc_power_supplies[CHARGER_BATTERY]);
+			power_supply_changed(&htc_power_supplies[CHARGER_BATTERY]);
 		if (htc_batt_info.rep.charging_source == CHARGER_USB || last_source == CHARGER_USB)
-	power_supply_changed(&htc_power_supplies[CHARGER_USB]);
+			power_supply_changed(&htc_power_supplies[CHARGER_USB]);
 		if (htc_batt_info.rep.charging_source == CHARGER_AC || last_source == CHARGER_AC)
-	power_supply_changed(&htc_power_supplies[CHARGER_AC]);
+			power_supply_changed(&htc_power_supplies[CHARGER_AC]);
 	}
 	mutex_unlock(&htc_batt_info.lock);
 
 	return rc;
+}
+
+int is_ac_power_supplied(void)
+{
+	if (!htc_battery_initial)
+		return 0;
+
+	return htc_batt_info.rep.charging_source == CHARGER_AC;
 }
 
 /* A9 reports USB charging when helf AC cable in and China AC charger. */
