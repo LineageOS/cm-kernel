@@ -236,6 +236,13 @@ void mdp_ppp_dump_debug(const struct mdp_info *mdp);
 #define MDP_DMA_P_OUT_XY                 (0x90010)
 #define MDP_DMA_P_COLOR_CORRECT_CONFIG   (0x90070)
 
+#define MDP_DMA_S_START                  (0x00048)
+#define MDP_DMA_S_CONFIG                 (0xa0000)
+#define MDP_DMA_S_SIZE                   (0xa0004)
+#define MDP_DMA_S_IBUF_ADDR              (0xa0008)
+#define MDP_DMA_S_IBUF_Y_STRIDE          (0xa000c)
+#define MDP_DMA_S_OUT_XY                 (0xa0010)
+
 #define MDP_LCDC_EN                      (0xe0000)
 #define MDP_LCDC_HSYNC_CTL               (0xe0004)
 #define MDP_LCDC_VSYNC_PERIOD            (0xe0008)
@@ -267,6 +274,7 @@ void mdp_ppp_dump_debug(const struct mdp_info *mdp);
 #define MDP_DMA_P_DONE			(1 << 2)
 #else /* CONFIG_MSM_MDP31 */
 #define MDP_DMA_P_DONE			(1 << 14)
+#define MDP_DMA_S_DONE			(1 << 2)
 #define MDP_LCDC_UNDERFLOW		(1 << 16)
 #define MDP_LCDC_FRAME_START		(1 << 15)
 #endif

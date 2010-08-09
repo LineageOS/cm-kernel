@@ -58,6 +58,7 @@ obj-$(CONFIG_MACH_SUPERSONIC) += msm_vibrator.o
 obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-microp.o
 obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-tpa2018d1.o
 obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-smb329.o
+obj-$(CONFIG_MACH_SUPERSONIC) += drv_callback.o
 
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery_trout.o
 obj-$(CONFIG_HTC_BATTCHG) += htc_battery.o
@@ -69,6 +70,7 @@ obj-$(CONFIG_HTC_AUDIO_JACK) += htc_audio_jack.o
 obj-$(CONFIG_HTC_35MM_JACK) += htc_35mm_jack.o
 obj-$(CONFIG_HTC_ACOUSTIC_QSD) += htc_acoustic_qsd.o
 obj-$(CONFIG_ARCH_MSM_FLASHLIGHT) += msm_flashlight.o
+obj-$(CONFIG_MICROP_COMMON) += atmega_microp_common.o
 
 obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-tpa2018d1.o
 obj-$(CONFIG_MACH_MAHIMAHI) += board-mahimahi-smb329.o

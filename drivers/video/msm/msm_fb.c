@@ -34,6 +34,8 @@
 #include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
 
+extern void start_drawing_late_resume(struct early_suspend *h);
+
 #define MSMFB_DEBUG 1
 #ifdef CONFIG_FB_MSM_LOGO
 #define INIT_IMAGE_FILE "/logo.rle"
@@ -57,7 +59,7 @@ extern int load_565rle_image(char *filename);
 
 #define DLOG(mask, fmt, args...) \
 do { \
-	if (msmfb_debug_mask & mask) \
+	if (1|| msmfb_debug_mask & mask) \
 		printk(KERN_INFO "msmfb: "fmt, ##args); \
 } while (0)
 
@@ -97,10 +99,12 @@ struct msmfb_info {
 	wait_queue_head_t frame_wq;
 	struct workqueue_struct *resume_workqueue;
 	struct work_struct resume_work;
+	struct work_struct msmfb_resume_work;
 	struct msmfb_callback dma_callback;
 	struct msmfb_callback vsync_callback;
 	struct hrtimer fake_vsync;
 	ktime_t vsync_request_time;
+	unsigned fb_resumed;
 };
 
 static int msmfb_open(struct fb_info *info, int user)
@@ -125,6 +129,7 @@ static void msmfb_handle_dma_interrupt(struct msmfb_callback *callback)
 	static int64_t frame_count;
 	static ktime_t last_sec;
 #endif
+printk(KERN_DEBUG "%s\n", __func__);
 
 	spin_lock_irqsave(&msmfb->update_lock, irq_flags);
 	msmfb->frame_done = msmfb->frame_requested;
@@ -158,6 +163,7 @@ static int msmfb_start_dma(struct msmfb_info *msmfb)
 	s64 time_since_request;
 	struct msm_panel_data *panel = msmfb->panel;
 
+printk(KERN_DEBUG "%s\n", __func__);
 	spin_lock_irqsave(&msmfb->update_lock, irq_flags);
 	time_since_request = ktime_to_ns(ktime_sub(ktime_get(),
 			     msmfb->vsync_request_time));
@@ -214,6 +220,7 @@ static void msmfb_handle_vsync_interrupt(struct msmfb_callback *callback)
 {
 	struct msmfb_info *msmfb = container_of(callback, struct msmfb_info,
 					       vsync_callback);
+printk(KERN_DEBUG "%s\n", __func__);
 	wake_unlock(&msmfb->idle_lock);
 	msmfb_start_dma(msmfb);
 }
@@ -222,6 +229,7 @@ static enum hrtimer_restart msmfb_fake_vsync(struct hrtimer *timer)
 {
 	struct msmfb_info *msmfb  = container_of(timer, struct msmfb_info,
 					       fake_vsync);
+printk(KERN_DEBUG "%s\n", __func__);
 	msmfb_start_dma(msmfb);
 	return HRTIMER_NORESTART;
 }
@@ -269,11 +277,9 @@ restart:
 			msmfb->sleeping != UPDATING, 5 * HZ);
 		if (ret <= 0 && (msmfb->frame_requested != msmfb->frame_done ||
 				 msmfb->sleeping == UPDATING)) {
-			if (retry && panel->request_vsync &&
-			    (sleeping == AWAKE)) {
+			if (retry && panel->request_vsync && (sleeping == AWAKE)) {
 				wake_lock_timeout(&msmfb->idle_lock, HZ/4);
-				panel->request_vsync(panel,
-					&msmfb->vsync_callback);
+				panel->request_vsync(panel, &msmfb->vsync_callback);
 				retry = 0;
 				printk(KERN_WARNING "msmfb_pan_display timeout "
 					"rerequest vsync\n");
@@ -364,6 +370,7 @@ static void power_on_panel(struct work_struct *work)
 
 	mutex_lock(&msmfb->panel_init_lock);
 	DLOG(SUSPEND_RESUME, "turning on panel\n");
+printk(KERN_DEBUG "%s: sleeping=%d\n", __func__, msmfb->sleeping);
 	if (msmfb->sleeping == UPDATING) {
 		wake_lock_timeout(&msmfb->idle_lock, HZ);
 		if (panel->unblank(panel)) {
@@ -390,6 +397,7 @@ static void msmfb_earlier_suspend(struct early_suspend *h)
 	struct msm_panel_data *panel = msmfb->panel;
 	unsigned long irq_flags;
 
+printk(KERN_DEBUG "%s\n", __func__);
 	mutex_lock(&msmfb->panel_init_lock);
 	msmfb->sleeping = SLEEPING;
 	wake_up(&msmfb->frame_wq);
@@ -414,16 +422,27 @@ static void msmfb_suspend(struct early_suspend *h)
 	struct msm_panel_data *panel = msmfb->panel;
 	/* suspend the panel */
 	panel->suspend(panel);
+	msmfb->fb_resumed = 0;
 	mutex_unlock(&msmfb->panel_init_lock);
 }
 
-static void msmfb_resume(struct early_suspend *h)
+static void msmfb_resume_handler(struct early_suspend *h)
 {
 	struct msmfb_info *msmfb = container_of(h, struct msmfb_info,
 						early_suspend);
+printk(KERN_DEBUG "%s\n", __func__);
+	queue_work(msmfb->resume_workqueue, &msmfb->msmfb_resume_work);
+	wait_event_interruptible_timeout(msmfb->frame_wq, msmfb->fb_resumed==1, HZ/2);
+}
+
+static void msmfb_resume(struct work_struct *work)
+{
+	struct msmfb_info *msmfb = container_of(work, struct msmfb_info,
+						msmfb_resume_work);
 	struct msm_panel_data *panel = msmfb->panel;
 	unsigned long irq_flags;
 
+printk(KERN_DEBUG "%s\n", __func__);
 	if (panel->resume(panel)) {
 		printk(KERN_INFO "msmfb: panel resume failed, not resuming "
 		       "fb\n");
@@ -434,6 +453,9 @@ static void msmfb_resume(struct early_suspend *h)
 	msmfb->sleeping = WAKING;
 	DLOG(SUSPEND_RESUME, "ready, waiting for full update\n");
 	spin_unlock_irqrestore(&msmfb->update_lock, irq_flags);
+	start_drawing_late_resume(NULL);
+	msmfb->fb_resumed = 1;
+	wake_up(&msmfb->frame_wq);
 }
 #endif
 
@@ -772,7 +794,7 @@ static int msmfb_probe(struct platform_device *pdev)
 	spin_lock_init(&msmfb->update_lock);
 	mutex_init(&msmfb->panel_init_lock);
 	init_waitqueue_head(&msmfb->frame_wq);
-	msmfb->resume_workqueue = create_workqueue("panel_on");
+	msmfb->resume_workqueue = create_rt_workqueue("panel_on");
 	if (msmfb->resume_workqueue == NULL) {
 		printk(KERN_ERR "failed to create panel_on workqueue\n");
 		ret = -ENOMEM;
@@ -785,8 +807,9 @@ static int msmfb_probe(struct platform_device *pdev)
 	wake_lock_init(&msmfb->idle_lock, WAKE_LOCK_IDLE, "msmfb_idle_lock");
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
+	INIT_WORK(&msmfb->msmfb_resume_work, msmfb_resume);
 	msmfb->early_suspend.suspend = msmfb_suspend;
-	msmfb->early_suspend.resume = msmfb_resume;
+	msmfb->early_suspend.resume = msmfb_resume_handler;
 	msmfb->early_suspend.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
 	register_early_suspend(&msmfb->early_suspend);
 

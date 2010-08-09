@@ -69,12 +69,31 @@ struct msm_panel_data {
 	uint32_t caps;
 };
 
+enum {
+	MDP_DMA_P = 0,
+	MDP_DMA_S,
+};
+
+enum {
+	COLOR_565 = 0,
+	COLOR_666,
+};
+
+struct msm_mdp_platform_data {
+	/* from the enum above */
+	int dma_channel;
+	unsigned ignore_pixel_data_attr;
+	unsigned color_format;
+};
+
 struct msm_mddi_client_data {
 	void (*suspend)(struct msm_mddi_client_data *);
 	void (*resume)(struct msm_mddi_client_data *);
 	void (*activate_link)(struct msm_mddi_client_data *);
 	void (*remote_write)(struct msm_mddi_client_data *, uint32_t val,
 			     uint32_t reg);
+	void (*remote_write_vals)(struct msm_mddi_client_data *, uint8_t * val,
+			     uint32_t reg, unsigned int nr_bytes);
 	uint32_t (*remote_read)(struct msm_mddi_client_data *, uint32_t reg);
 	void (*auto_hibernate)(struct msm_mddi_client_data *, int);
 	/* custom data that needs to be passed from the board file to a 
@@ -187,7 +206,6 @@ struct msm_mddi_bridge_platform_data {
 	/* board file will identify what capabilities the panel supports */
 	uint32_t panel_caps;
 };
-
 
 
 #endif

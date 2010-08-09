@@ -911,6 +911,7 @@ static int __init mddi_probe(struct platform_device *pdev)
 	mddi->client_data.resume = mddi_resume;
 	mddi->client_data.activate_link = mddi_activate_link;
 	mddi->client_data.remote_write = mddi_remote_write;
+	mddi->client_data.remote_write_vals = mddi_remote_write_vals;
 	mddi->client_data.remote_read = mddi_remote_read;
 	mddi->client_data.auto_hibernate = mddi_set_auto_hibernate;
 	mddi->client_data.fb_resource = pdata->fb_resource;

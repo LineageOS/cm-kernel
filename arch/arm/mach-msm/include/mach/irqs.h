@@ -77,12 +77,17 @@
 #define INT_SDC4_1           (32 + 19)
 #define INT_UART2DM_RX       (32 + 20)
 #define INT_UART2DM_IRQ      (32 + 21)
+#define INT_VFE              (32 + 22)
 
 /* 22-31 are reserved */
 
 #define NR_MSM_IRQS 64
 #define NR_SIRC_IRQS 0
+#if defined(CONFIG_ARCH_MSM7225) || defined(CONFIG_ARCH_MSM7227)
+#define NR_GPIO_IRQS 133
+#else
 #define NR_GPIO_IRQS 122
+#endif
 #endif
 
 #if defined(CONFIG_ARCH_MSM_SCORPION)
@@ -184,13 +189,18 @@
 #define MSM_IRQ_BIT(irq)     (1 << ((irq) & 31))
 
 #define NR_BOARD_IRQS 64
-
-#define NR_IRQS (NR_MSM_IRQS + NR_SIRC_IRQS + NR_GPIO_IRQS + NR_BOARD_IRQS)
+#define NR_MICROP_IRQS 16
+#define NR_IRQS (NR_MSM_IRQS + NR_SIRC_IRQS + NR_GPIO_IRQS + NR_BOARD_IRQS \
+		+ NR_MICROP_IRQS)
 
 #define FIRST_SIRC_IRQ (NR_MSM_IRQS)
 #define FIRST_GPIO_IRQ (NR_MSM_IRQS + NR_SIRC_IRQS)
 #define FIRST_BOARD_IRQ (NR_MSM_IRQS + NR_SIRC_IRQS + NR_GPIO_IRQS)
+#define FIRST_MICROP_IRQ (FIRST_BOARD_IRQ + NR_BOARD_IRQS)
 
 #define MSM_GPIO_TO_INT(n) (FIRST_GPIO_IRQ + (n))
 
+#define MSM_INT_TO_GPIO(n) ((n) - NR_MSM_IRQS)
+
+#define MSM_uP_TO_INT(n) (FIRST_MICROP_IRQ + (n))
 #endif

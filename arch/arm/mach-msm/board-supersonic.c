@@ -175,9 +175,7 @@ static int __capella_cm3602_power(int on)
 		if (ret < 0)
 			printk(KERN_ERR "%s: vreg enable failed\n", __func__);
 	} else {
-		ret = vreg_disable(vreg);
-		if (ret < 0)
-			printk(KERN_ERR "%s: vreg disable failed\n", __func__);
+		vreg_disable(vreg);
 		gpio_direction_output(SUPERSONIC_GPIO_PROXIMITY_EN_N, 0);
 	}
 

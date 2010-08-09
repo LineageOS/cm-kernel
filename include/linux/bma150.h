@@ -52,7 +52,7 @@
 #define BMA_IOCTL_READ_ACCELERATION    _IOWR(BMAIO, 0x34, short[7])
 #define BMA_IOCTL_SET_MODE	  _IOW(BMAIO, 0x35, short)
 #define BMA_IOCTL_GET_INT	  _IOR(BMAIO, 0x36, short)
-
+#define BMA_IOCTL_GET_CHIP_LAYOUT	_IOR(BMAIO, 0x37, short)
 
 /* range and bandwidth */
 #define BMA_RANGE_2G			0
@@ -73,6 +73,8 @@
 
 struct bma150_platform_data {
 	int intr;
+	int microp_new_cmd;
+	int chip_layout;
 };
 
 #endif

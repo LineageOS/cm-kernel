@@ -113,6 +113,7 @@ static void smb329_work_func(struct work_struct *work)
 	case SMB329_ENABLE_FAST_CHG:
 		pr_info("smb329: charger on (fast)\n");
 		smb329_i2c_write_byte(0x84, 0x31);
+		smb329_i2c_write_byte(0xD0, 0x01);
 		smb329_i2c_write_byte(0x08, 0x05);
 		if ((smb329.version & 0x18) == 0x0)
 			smb329_i2c_write_byte(0xA9, 0x00);

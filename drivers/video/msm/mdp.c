@@ -234,6 +234,74 @@ static int mdp_ppp_wait(struct mdp_info *mdp)
 	return mdp_wait(mdp, DL0_ROI_DONE, &mdp_ppp_waitqueue);
 }
 
+static void mdp_dmas_to_mddi(void *priv, uint32_t addr, uint32_t stride,
+		uint32_t width, uint32_t height, uint32_t x, uint32_t y)
+{
+	struct mdp_info *mdp = priv;
+	uint32_t dma2_cfg;
+	uint16_t ld_param = 1;
+
+	dma2_cfg = DMA_PACK_TIGHT |
+		DMA_PACK_ALIGN_LSB |
+		DMA_PACK_PATTERN_RGB |
+		DMA_OUT_SEL_AHB |
+		DMA_IBUF_NONCONTIGUOUS;
+
+	dma2_cfg |= mdp->format;
+
+	dma2_cfg |= DMA_OUT_SEL_MDDI;
+
+	dma2_cfg |= DMA_MDDI_DMAOUT_LCD_SEL_PRIMARY;
+
+	dma2_cfg |= DMA_DITHER_EN;
+
+#if defined(CONFIG_FB_565)
+	dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_5BITS | DMA_DSTC2R_5BITS;
+#else
+	/* 666 18BPP */
+	dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
+#endif
+
+#ifdef CONFIG_MSM_MDP22
+	/* setup size, address, and stride */
+	mdp_writel(mdp, (height << 16) | (width),
+		   MDP_CMD_DEBUG_ACCESS_BASE + 0x0184);
+	mdp_writel(mdp, addr, MDP_CMD_DEBUG_ACCESS_BASE + 0x0188);
+	mdp_writel(mdp, stride, MDP_CMD_DEBUG_ACCESS_BASE + 0x018C);
+
+	/* set y & x offset and MDDI transaction parameters */
+	mdp_writel(mdp, (y << 16) | (x), MDP_CMD_DEBUG_ACCESS_BASE + 0x0194);
+	mdp_writel(mdp, ld_param, MDP_CMD_DEBUG_ACCESS_BASE + 0x01a0);
+	mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_PRIM,
+		   MDP_CMD_DEBUG_ACCESS_BASE + 0x01a4);
+
+	mdp_writel(mdp, dma2_cfg, MDP_CMD_DEBUG_ACCESS_BASE + 0x0180);
+
+	/* start DMA2 */
+	mdp_writel(mdp, 0, MDP_CMD_DEBUG_ACCESS_BASE + 0x0044);
+#else
+	/* setup size, address, and stride */
+	mdp_writel(mdp, (height << 16) | (width), MDP_DMA_S_SIZE);
+	mdp_writel(mdp, addr, MDP_DMA_S_IBUF_ADDR);
+	mdp_writel(mdp, stride, MDP_DMA_S_IBUF_Y_STRIDE);
+
+	/* set y & x offset and MDDI transaction parameters */
+	mdp_writel(mdp, (y << 16) | (x), MDP_DMA_S_OUT_XY);
+	mdp_writel(mdp, ld_param, MDP_MDDI_PARAM_WR_SEL);
+
+#if 0
+	mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_PRIM,
+		   MDP_MDDI_PARAM);
+#else
+	mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_SECD | SECONDARY_LCD_SYNC_EN,
+		   MDP_MDDI_PARAM);
+#endif
+
+	mdp_writel(mdp, dma2_cfg, MDP_DMA_S_CONFIG);
+	mdp_writel(mdp, 0, MDP_DMA_S_START);
+#endif
+}
+
 static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 			    uint32_t width, uint32_t height, uint32_t x,
 			    uint32_t y)
@@ -256,8 +324,12 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 
 	dma2_cfg |= DMA_DITHER_EN;
 
+#if defined(CONFIG_FB_565)
+dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_5BITS | DMA_DSTC2R_5BITS;
+#else
 	/* 666 18BPP */
 	dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
+#endif
 
 #ifdef CONFIG_MSM_MDP22
 	/* setup size, address, and stride */
@@ -756,6 +828,7 @@ int mdp_probe(struct platform_device *pdev)
 	struct resource *resource;
 	int ret;
 	struct mdp_info *mdp;
+	struct msm_mdp_platform_data *pdata = pdev->dev.platform_data;
 
 	resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!resource) {
@@ -792,8 +865,13 @@ int mdp_probe(struct platform_device *pdev)
 	mdp->mdp_dev.check_output_format = mdp_check_output_format;
 	mdp->mdp_dev.configure_dma = mdp_configure_dma;
 
-	ret = mdp_out_if_register(&mdp->mdp_dev, MSM_MDDI_PMDH_INTERFACE, mdp,
-				  MDP_DMA_P_DONE, mdp_dma_to_mddi);
+	if (pdata == NULL || pdata->dma_channel == MDP_DMA_P) {
+		ret = mdp_out_if_register(&mdp->mdp_dev, MSM_MDDI_PMDH_INTERFACE, mdp,
+					  MDP_DMA_P_DONE, mdp_dma_to_mddi);
+	} else if (pdata->dma_channel == MDP_DMA_S) {
+		ret = mdp_out_if_register(&mdp->mdp_dev, MSM_MDDI_PMDH_INTERFACE, mdp,
+					  MDP_DMA_S_DONE, mdp_dmas_to_mddi);
+	}
 	if (ret)
 		goto error_mddi_pmdh_register;
 

@@ -292,6 +292,12 @@ config LEDS_DELL_NETBOOKS
 	  This adds support for the Latitude 2100 and similar
 	  notebooks that have an external LED.
 
+config MICROP_COMMON
+	tristate "LED Support for Microp"
+	depends on I2C
+	help
+	  HTC LED-Microp support.
+
 config LEDS_TRIGGERS
 	bool "LED Trigger support"
 	help

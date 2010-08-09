@@ -66,7 +66,7 @@ static int capella_cm3602_enable(struct capella_cm3602_data *data)
 		D("%s: already enabled\n", __func__);
 		return 0;
 	}
-	data->pdata->power(1);
+	data->pdata->power(1, 1);
 	data->enabled = !rc;
 	if (!rc)
 		capella_cm3602_report(data);
@@ -81,7 +81,7 @@ static int capella_cm3602_disable(struct capella_cm3602_data *data)
 		D("%s: already disabled\n", __func__);
 		return 0;
 	}
-	data->pdata->power(0);
+	data->pdata->power(1, 0);
 	data->enabled = 0;
 	return rc;
 }
