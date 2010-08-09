@@ -24,6 +24,7 @@
 
 #include <asm/mach/flash.h>
 #include <asm/mach/mmc.h>
+#include <asm/setup.h>
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
 
@@ -662,3 +663,37 @@ struct clk msm_clocks[] = {
 #endif
 	CLOCK(NULL, 0, NULL, 0, 0),
 };
+
+#define ATAG_PANEL_TYPE 0x4d534D74
+int panel_type;
+int __init tag_panel_parsing(const struct tag *tags)
+{
+	panel_type = tags->u.revision.rev;
+
+	printk(KERN_DEBUG "%s: panel type = %d\n", __func__,
+		panel_type);
+
+	return panel_type;
+}
+__tagtable(ATAG_PANEL_TYPE, tag_panel_parsing);
+
+#define ATAG_SKUID 0x4d534D73
+int __init parse_tag_skuid(const struct tag *tags)
+{
+	int skuid = 0, find = 0;
+	struct tag *t = (struct tag *)tags;
+
+	for (; t->hdr.size; t = tag_next(t)) {
+		if (t->hdr.tag == ATAG_SKUID) {
+			printk(KERN_DEBUG "find the skuid tag\n");
+			find = 1;
+			break;
+		}
+	}
+
+	if (find)
+		skuid = t->u.revision.rev;
+	printk(KERN_DEBUG "parse_tag_skuid: hwid = 0x%x\n", skuid);
+	return skuid;
+}
+__tagtable(ATAG_SKUID, parse_tag_skuid);
