@@ -399,9 +399,6 @@ static uint16_t mddi_init_registers(struct mddi_info *mddi)
 	mddi_writel(0x0003, SPM); /* subframes per media */
 	mddi_writel(0x0005, TA1_LEN);
 	mddi_writel(MDDI_HOST_TA2_LEN, TA2_LEN);
-	mddi_writel(0x0096, DRIVE_HI);
-	/* 0x32 normal, 0x50 for Toshiba display */
-	mddi_writel(0x0050, DRIVE_LO);
 	mddi_writel(0x003C, DISP_WAKE); /* wakeup counter */
 	mddi_writel(MDDI_HOST_REV_RATE_DIV, REV_RATE_DIV);
 
@@ -422,6 +419,19 @@ static uint16_t mddi_init_registers(struct mddi_info *mddi)
 	/* Recommendation from PAD hw team */
 	mddi_writel(0xa850f, PAD_CTL);
 
+	// XXX: This ifdef should not be device-specific, but config-based
+#ifdef CONFIG_MACH_SUPERSONIC
+	/* Only for novatek driver IC*/
+	mddi_writel(0x00C8, DRIVE_HI);
+	/* 0x32 normal, 0x50 for Toshiba display */
+	mddi_writel(0x0050, DRIVE_LO);
+	mddi_writel(0x00320000, PAD_IO_CTL);
+	mddi_writel(0x00220020, PAD_CAL);
+#else
+	mddi_writel(0x0096, DRIVE_HI);
+	/* 0x32 normal, 0x50 for Toshiba display */
+	mddi_writel(0x0050, DRIVE_LO);
+#endif
 
 	/* Need an even number for counts */
 	mddi_writel(0x60006, DRIVER_START_CNT);
