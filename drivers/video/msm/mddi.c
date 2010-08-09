@@ -162,7 +162,7 @@ static void mddi_handle_rev_data(struct mddi_info *mddi, union mddi_rev *rev)
 				printk(KERN_INFO "rev: got reg %x = %x without "
 						 " pending read\n",
 				       rev->reg.register_address,
-				       rev->reg.register_data_list);
+				       rev->reg.u.reg_data);
 				break;
 			}
 			if (ri->reg != rev->reg.register_address) {
@@ -170,12 +170,12 @@ static void mddi_handle_rev_data(struct mddi_info *mddi, union mddi_rev *rev)
 						 "wrong register, expected "
 						 "%x\n",
 				       rev->reg.register_address,
-				       rev->reg.register_data_list, ri->reg);
+				       rev->reg.u.reg_data, ri->reg);
 				break;
 			}
 			mddi->reg_read = NULL;
 			ri->status = 0;
-			ri->result = rev->reg.register_data_list;
+			ri->result = rev->reg.u.reg_data;
 			complete(&ri->done);
 			break;
 		default:
@@ -565,14 +565,14 @@ int mddi_check_status(struct mddi_info *mddi)
 	return ret;
 }
 
-
-void mddi_remote_write(struct msm_mddi_client_data *cdata, uint32_t val,
-		       uint32_t reg)
+void mddi_remote_write_vals(struct msm_mddi_client_data *cdata, uint8_t * val,
+		uint32_t reg, unsigned int nr_bytes)
 {
 	struct mddi_info *mddi = container_of(cdata, struct mddi_info,
 					      client_data);
 	struct mddi_llentry *ll;
 	struct mddi_register_access *ra;
+	dma_addr_t bus_addr = 0;
 	/* unsigned s; */
 
 	mutex_lock(&mddi->reg_write_lock);
@@ -580,20 +580,41 @@ void mddi_remote_write(struct msm_mddi_client_data *cdata, uint32_t val,
 	ll = mddi->reg_write_data;
 
 	ra = &(ll->u.r);
-	ra->length = 14 + 4;
+	ra->length = 14 + nr_bytes;
 	ra->type = TYPE_REGISTER_ACCESS;
 	ra->client_id = 0;
-	ra->read_write_info = MDDI_WRITE | 1;
+	ra->read_write_info = MDDI_WRITE | (nr_bytes / 4);
 	ra->crc16 = 0;
 
 	ra->register_address = reg;
-	ra->register_data_list = val;
 
 	ll->flags = 1;
 	ll->header_count = 14;
 	ll->data_count = 4;
-	ll->data = mddi->reg_write_addr + offsetof(struct mddi_llentry,
-						   u.r.register_data_list);
+
+	if (nr_bytes == 4) {
+		uint32_t *prm = (uint32_t *)val;
+
+		ll->data = mddi->reg_write_addr +
+			offsetof(struct mddi_llentry, u.r.u.reg_data);
+		ra->u.reg_data = *prm;
+	} else {
+		int dma_retry = 5;
+
+		while (dma_retry--) {
+			bus_addr = dma_map_single(NULL, (void *)val, nr_bytes, DMA_TO_DEVICE);
+			if (dma_mapping_error(NULL, bus_addr) == 0)
+				break;
+			msleep(1);
+		}
+		if (dma_retry == 0) {
+			printk(KERN_ERR "%s: dma map fail!\n", __func__);
+			return;
+		}
+
+		ll->data = bus_addr;
+		ra->u.reg_data_list = (uint32_t *) bus_addr;
+	}
 	ll->next = 0;
 	ll->reserved = 0;
 
@@ -608,9 +629,18 @@ void mddi_remote_write(struct msm_mddi_client_data *cdata, uint32_t val,
 	 * val, reg, s); */
 
 	mddi_wait_interrupt(mddi, MDDI_INT_PRI_LINK_LIST_DONE);
+	if (bus_addr)
+		dma_unmap_single(NULL, bus_addr, nr_bytes, DMA_TO_DEVICE);
 	/* printk(KERN_INFO "mddi_remote_write(%x, %x) done, stat = %x\n",
 	 * val, reg, s); */
 	mutex_unlock(&mddi->reg_write_lock);
+}
+
+inline void mddi_remote_write(struct msm_mddi_client_data *cdata, uint32_t val,
+		uint32_t reg)
+{
+	uint8_t * p = (uint8_t *) &val;
+	mddi_remote_write_vals(cdata, p, reg, sizeof(uint32_t));
 }
 
 uint32_t mddi_remote_read(struct msm_mddi_client_data *cdata, uint32_t reg)
@@ -840,7 +870,11 @@ static int __init mddi_probe(struct platform_device *pdev)
 	}
 	mddi_set_auto_hibernate(&mddi->client_data, 1);
 
+#if 0
 	if (mddi->caps.Mfr_Name == 0 && mddi->caps.Product_Code == 0)
+#else
+	if (mddi->caps.Mfr_Name == 0)
+#endif
 		pdata->fixup(&mddi->caps.Mfr_Name, &mddi->caps.Product_Code);
 
 	mddi->client_pdev.id = 0;

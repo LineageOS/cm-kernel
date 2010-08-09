@@ -284,7 +284,10 @@ struct __attribute__((packed)) mddi_register_access {
 
 	uint16_t crc16;
 
-	uint32_t register_data_list;
+	union {
+		uint32_t reg_data;
+		uint32_t *reg_data_list;
+	} u;
 	/* list of 4-byte register data values for/from client registers */
 };
 
