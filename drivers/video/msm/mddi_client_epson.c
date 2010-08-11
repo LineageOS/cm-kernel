@@ -160,9 +160,6 @@ static int mddi_epson_probe(struct platform_device *pdev)
 	struct msm_mddi_client_data *client_data = pdev->dev.platform_data;
 	struct msm_mddi_bridge_platform_data *bridge_data =
 		client_data->private_client_data;
-#if 0
-	struct panel_data *panel_data = &bridge_data->panel_conf;
-#endif
 	struct panel_info *panel =
 		kzalloc(sizeof(struct panel_info), GFP_KERNEL);
 	if (!panel)
@@ -171,11 +168,7 @@ static int mddi_epson_probe(struct platform_device *pdev)
 
 	printk(KERN_DEBUG "%s\n", __func__);
 
-#if 0
-	if (panel_data->caps & MSMFB_CAP_CABC) {
-#else
-	if (1) {
-#endif
+	if (bridge_data->panel_caps & MSMFB_CAP_CABC) {
 		printk(KERN_INFO "CABC enabled\n");
 		mddi_eps_cabc.dev.platform_data = client_data;
 		platform_device_register(&mddi_eps_cabc);

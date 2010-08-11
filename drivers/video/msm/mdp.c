@@ -289,13 +289,13 @@ static void mdp_dmas_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 	mdp_writel(mdp, (y << 16) | (x), MDP_DMA_S_OUT_XY);
 	mdp_writel(mdp, ld_param, MDP_MDDI_PARAM_WR_SEL);
 
-#if 0
-	mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_PRIM,
+	if (mdp->mdp_dev.ignore_pixel_data_attr) {
+		mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_PRIM,
 		   MDP_MDDI_PARAM);
-#else
-	mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_SECD | SECONDARY_LCD_SYNC_EN,
-		   MDP_MDDI_PARAM);
-#endif
+	} else {
+		mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | 
+		   MDDI_VDO_PACKET_SECD | SECONDARY_LCD_SYNC_EN, MDP_MDDI_PARAM);
+	}
 
 	mdp_writel(mdp, dma2_cfg, MDP_DMA_S_CONFIG);
 	mdp_writel(mdp, 0, MDP_DMA_S_START);
@@ -864,6 +864,16 @@ int mdp_probe(struct platform_device *pdev)
 	mdp->mdp_dev.set_output_format = mdp_set_output_format;
 	mdp->mdp_dev.check_output_format = mdp_check_output_format;
 	mdp->mdp_dev.configure_dma = mdp_configure_dma;
+
+	if (pdata == NULL || pdata->ignore_pixel_data_attr == 0)
+		mdp->mdp_dev.ignore_pixel_data_attr = 0;
+	else if(pdata->ignore_pixel_data_attr)
+		mdp->mdp_dev.ignore_pixel_data_attr = pdata->ignore_pixel_data_attr;
+
+	if (pdata == NULL || pdata->color_format == 0)
+		mdp->mdp_dev.color_format = 0;
+	else if(pdata->color_format)
+		mdp->mdp_dev.color_format = pdata->color_format;
 
 	if (pdata == NULL || pdata->dma_channel == MDP_DMA_P) {
 		ret = mdp_out_if_register(&mdp->mdp_dev, MSM_MDDI_PMDH_INTERFACE, mdp,

@@ -162,9 +162,6 @@ static int mddi_novtec_probe(struct platform_device *pdev)
 	struct msm_mddi_client_data *client_data = pdev->dev.platform_data;
 	struct msm_mddi_bridge_platform_data *bridge_data =
 		client_data->private_client_data;
-#if 0
-	struct panel_data *panel_data = &bridge_data->panel_conf;
-#endif
 	struct panel_info *panel =
 		kzalloc(sizeof(struct panel_info), GFP_KERNEL);
 
@@ -172,11 +169,7 @@ static int mddi_novtec_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	platform_set_drvdata(pdev, panel);
 
-#if 0
-	if (panel_data->caps & MSMFB_CAP_CABC) {
-#else
-	if (1) {
-#endif
+	if (bridge_data->panel_caps & MSMFB_CAP_CABC) {
 		printk(KERN_INFO "CABC enabled\n");
 		mddi_nov_cabc.dev.platform_data = client_data;
 		platform_device_register(&mddi_nov_cabc);

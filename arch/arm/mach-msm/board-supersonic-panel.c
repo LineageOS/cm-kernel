@@ -697,9 +697,7 @@ static struct msm_mddi_bridge_platform_data novatec_client_data = {
 		.height = 80,
 		.output_format = 0,
 	},
-//	.panel_conf = {
-//		.caps = MSMFB_CAP_CABC,
-//	},
+	.panel_caps = MSMFB_CAP_CABC,
 };
 
 static struct msm_mddi_bridge_platform_data epson_client_data = {
@@ -714,9 +712,7 @@ static struct msm_mddi_bridge_platform_data epson_client_data = {
 		.height = 80,
 		.output_format = 0,
 	},
-//	.panel_conf = {
-//		.caps = MSMFB_CAP_CABC,
-//	},
+	.panel_caps = MSMFB_CAP_CABC,
 };
 
 
