@@ -80,6 +80,7 @@ module_param_named(usb_h2w_sw, opt_usb_h2w_sw, uint, 0);
 void msm_init_pmic_vibrator(void);
 static void config_supersonic_usb_id_gpios(bool output);
 extern void __init supersonic_audio_init(void);
+extern void __init supersonic_init_panel(void);
 #ifdef CONFIG_MICROP_COMMON
 void __init supersonic_microp_init(void);
 #endif
@@ -390,11 +391,11 @@ static struct platform_device rndis_device = {
 #endif
 
 static struct android_usb_platform_data android_usb_pdata = {
-	.vendor_id  = 0x18d1,
-	.product_id = 0x4e11,
-	.version  = 0x0100,
-	.product_name   = "Supersonic",
-	.manufacturer_name  = "HTC",
+	.vendor_id	= 0x0bb4,
+	.product_id	= 0x0c8d,
+	.version	= 0x0100,
+	.product_name		= "Android Phone",
+	.manufacturer_name	= "HTC",
 	.num_products = ARRAY_SIZE(usb_products),
 	.products = usb_products,
 	.num_functions = ARRAY_SIZE(usb_functions_all),
@@ -1290,6 +1291,7 @@ static void __init supersonic_init(void)
 	gpio_direction_output(SUPERSONIC_GPIO_TP_EN, 0);
 
 	supersonic_audio_init();
+	supersonic_init_panel();
 #ifdef CONFIG_MICROP_COMMON
 	supersonic_microp_init();
 #endif

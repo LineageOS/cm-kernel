@@ -739,8 +739,7 @@ static uint32_t spi_off_gpio_table[] = {
 
 static int spi_gpio_switch(int on)
 {
-	printk(KERN_DEBUG "(off==ignored) %s: %s\n", __func__, on ? "on" : "off");
-if (!on)return 0;
+	printk(KERN_DEBUG "%s: %s\n", __func__, on ? "on" : "off");
 
 	config_gpio_table(on ? spi_on_gpio_table : spi_off_gpio_table,
 		ARRAY_SIZE(spi_on_gpio_table));
@@ -878,7 +877,6 @@ static struct platform_driver suc_backlight_driver = {
 
 static struct msm_mdp_platform_data mdp_pdata = {
 	.dma_channel = MDP_DMA_S,
-	.color_format = COLOR_565,
 };
 
 int __init supersonic_init_panel(void)
@@ -898,10 +896,13 @@ int __init supersonic_init_panel(void)
 	if (IS_ERR(vreg_lcd_2v8))
 		return PTR_ERR(vreg_lcd_2v8);
 
-	if (panel_type == PANEL_SHARP)
-		mdp_pdata.ignore_pixel_data_attr = 1;
-	else
-		mdp_pdata.ignore_pixel_data_attr = 0;
+	if (panel_type == PANEL_SHARP) {
+		mdp_pdata.overrides |= MSM_MDP_PANEL_IGNORE_PIXEL_DATA;
+		mdp_pdata.color_format = MSM_MDP_OUT_IF_FMT_RGB565;
+	} else {
+		mdp_pdata.overrides &= ~MSM_MDP_PANEL_IGNORE_PIXEL_DATA;
+		mdp_pdata.color_format = MSM_MDP_OUT_IF_FMT_RGB666;
+	}
 	msm_device_mdp.dev.platform_data = &mdp_pdata;
 
 	rc = platform_device_register(&msm_device_mdp);
@@ -928,5 +929,3 @@ int __init supersonic_init_panel(void)
 
 	return 0;
 }
-
-device_initcall(supersonic_init_panel);

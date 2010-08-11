@@ -269,9 +269,11 @@ void mdp_ppp_dump_debug(const struct mdp_info *mdp);
 #define DL0_ROI_DONE			(1<<0)
 #define TV_OUT_DMA3_DONE		(1<<6)
 #define TV_ENC_UNDERRUN			(1<<7)
+#define TV_OUT_FRAME_START		(1<<13)
 
 #ifdef CONFIG_MSM_MDP22
 #define MDP_DMA_P_DONE			(1 << 2)
+#define MDP_DMA_S_DONE			(1 << 3)
 #else /* CONFIG_MSM_MDP31 */
 #define MDP_DMA_P_DONE			(1 << 14)
 #define MDP_DMA_S_DONE			(1 << 2)
@@ -771,7 +773,8 @@ void mdp_ppp_dump_debug(const struct mdp_info *mdp);
 #endif
 
 /* MDDI REGISTER ? */
-#define MDDI_VDO_PACKET_DESC  0x5666
+#define MDDI_VDO_PACKET_DESC_RGB565  0x5565
+#define MDDI_VDO_PACKET_DESC_RGB666  0x5666
 #define MDDI_VDO_PACKET_PRIM  0xC3
 #define MDDI_VDO_PACKET_SECD  0xC0
 

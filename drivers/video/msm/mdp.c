@@ -34,6 +34,12 @@
 #include "mdp_hw.h"
 #include "mdp_ppp.h"
 
+#ifdef MDP_DEBUG
+#define D(x...) printk(KERN_DEBUG x)
+#else
+#define D(x...) do {} while (0)
+#endif
+
 struct class *mdp_class;
 
 #define MDP_CMD_DEBUG_ACCESS_BASE (0x10000)
@@ -239,15 +245,24 @@ static void mdp_dmas_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 {
 	struct mdp_info *mdp = priv;
 	uint32_t dma2_cfg;
+	uint32_t video_packet_parameter = 0;
 	uint16_t ld_param = 1;
 
 	dma2_cfg = DMA_PACK_TIGHT |
 		DMA_PACK_ALIGN_LSB |
-		DMA_PACK_PATTERN_RGB |
 		DMA_OUT_SEL_AHB |
 		DMA_IBUF_NONCONTIGUOUS;
 
 	dma2_cfg |= mdp->format;
+
+#if defined CONFIG_MSM_MDP22 || defined CONFIG_MSM_MDP30
+	if (mdp->format == DMA_IBUF_FORMAT_RGB888_OR_ARGB8888)
+#else
+	if (mdp->format == DMA_IBUF_FORMAT_XRGB8888)
+#endif
+		dma2_cfg |= DMA_PACK_PATTERN_BGR;
+	else
+		dma2_cfg |= DMA_PACK_PATTERN_RGB;
 
 	dma2_cfg |= DMA_OUT_SEL_MDDI;
 
@@ -255,31 +270,14 @@ static void mdp_dmas_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 
 	dma2_cfg |= DMA_DITHER_EN;
 
-#if defined(CONFIG_FB_565)
-	dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_5BITS | DMA_DSTC2R_5BITS;
-#else
-	/* 666 18BPP */
-	dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
-#endif
+	if (mdp->mdp_dev.color_format == MSM_MDP_OUT_IF_FMT_RGB565) {
+		dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_5BITS | DMA_DSTC2R_5BITS;
+		video_packet_parameter |= (MDDI_VDO_PACKET_DESC_RGB565 << 16);
+	} else if (mdp->mdp_dev.color_format == MSM_MDP_OUT_IF_FMT_RGB666) {
+		dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
+		video_packet_parameter |= (MDDI_VDO_PACKET_DESC_RGB666 << 16);
+	}
 
-#ifdef CONFIG_MSM_MDP22
-	/* setup size, address, and stride */
-	mdp_writel(mdp, (height << 16) | (width),
-		   MDP_CMD_DEBUG_ACCESS_BASE + 0x0184);
-	mdp_writel(mdp, addr, MDP_CMD_DEBUG_ACCESS_BASE + 0x0188);
-	mdp_writel(mdp, stride, MDP_CMD_DEBUG_ACCESS_BASE + 0x018C);
-
-	/* set y & x offset and MDDI transaction parameters */
-	mdp_writel(mdp, (y << 16) | (x), MDP_CMD_DEBUG_ACCESS_BASE + 0x0194);
-	mdp_writel(mdp, ld_param, MDP_CMD_DEBUG_ACCESS_BASE + 0x01a0);
-	mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_PRIM,
-		   MDP_CMD_DEBUG_ACCESS_BASE + 0x01a4);
-
-	mdp_writel(mdp, dma2_cfg, MDP_CMD_DEBUG_ACCESS_BASE + 0x0180);
-
-	/* start DMA2 */
-	mdp_writel(mdp, 0, MDP_CMD_DEBUG_ACCESS_BASE + 0x0044);
-#else
 	/* setup size, address, and stride */
 	mdp_writel(mdp, (height << 16) | (width), MDP_DMA_S_SIZE);
 	mdp_writel(mdp, addr, MDP_DMA_S_IBUF_ADDR);
@@ -289,17 +287,22 @@ static void mdp_dmas_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 	mdp_writel(mdp, (y << 16) | (x), MDP_DMA_S_OUT_XY);
 	mdp_writel(mdp, ld_param, MDP_MDDI_PARAM_WR_SEL);
 
-	if (mdp->mdp_dev.ignore_pixel_data_attr) {
-		mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_PRIM,
-		   MDP_MDDI_PARAM);
+	if (mdp->mdp_dev.overrides & MSM_MDP_PANEL_IGNORE_PIXEL_DATA) {
+		/* 0xE3 == 0xC0 | 0x20 | 0x03 */
+		video_packet_parameter |= MDDI_VDO_PACKET_SECD |
+			SECONDARY_LCD_SYNC_EN |
+			DISP0_VSYNC_MAP_VSYNC2;
 	} else {
-		mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | 
-		   MDDI_VDO_PACKET_SECD | SECONDARY_LCD_SYNC_EN, MDP_MDDI_PARAM);
+		video_packet_parameter |= MDDI_VDO_PACKET_PRIM;
 	}
+
+	mdp_writel(mdp, video_packet_parameter, MDP_MDDI_PARAM);
 
 	mdp_writel(mdp, dma2_cfg, MDP_DMA_S_CONFIG);
 	mdp_writel(mdp, 0, MDP_DMA_S_START);
-#endif
+
+	D("%s: format=%x, vdo=%x, cfg=%x\n", __func__, mdp->format,
+		(MDDI_VDO_PACKET_DESC << 16) | vdo_desc, dma2_cfg);
 }
 
 static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
@@ -307,29 +310,43 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 			    uint32_t y)
 {
 	struct mdp_info *mdp = priv;
-	uint32_t dma2_cfg;
+	uint32_t dma2_cfg = 0;
+	uint32_t video_packet_parameter = 0;
 	uint16_t ld_param = 0; /* 0=PRIM, 1=SECD, 2=EXT */
 
+#if !defined(CONFIG_MSM_MDP30)
 	dma2_cfg = DMA_PACK_TIGHT |
 		DMA_PACK_ALIGN_LSB |
-		DMA_PACK_PATTERN_RGB |
 		DMA_OUT_SEL_AHB |
 		DMA_IBUF_NONCONTIGUOUS;
+#endif
 
 	dma2_cfg |= mdp->format;
+
+#if defined CONFIG_MSM_MDP22 || defined CONFIG_MSM_MDP30
+	if (mdp->format == DMA_IBUF_FORMAT_RGB888_OR_ARGB8888)
+#else
+	if (mdp->format == DMA_IBUF_FORMAT_XRGB8888)
+#endif
+		dma2_cfg |= DMA_PACK_PATTERN_BGR;
+	else
+		dma2_cfg |= DMA_PACK_PATTERN_RGB;
 
 	dma2_cfg |= DMA_OUT_SEL_MDDI;
 
 	dma2_cfg |= DMA_MDDI_DMAOUT_LCD_SEL_PRIMARY;
 
+#if !defined(CONFIG_MSM_MDP30)
 	dma2_cfg |= DMA_DITHER_EN;
-
-#if defined(CONFIG_FB_565)
-	dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_5BITS | DMA_DSTC2R_5BITS;
-#else
-	/* 666 18BPP */
-	dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
 #endif
+
+	if (mdp->mdp_dev.color_format == MSM_MDP_OUT_IF_FMT_RGB565) {
+		dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_5BITS | DMA_DSTC2R_5BITS;
+		video_packet_parameter |= (MDDI_VDO_PACKET_DESC_RGB565 << 16);
+	} else if (mdp->mdp_dev.color_format == MSM_MDP_OUT_IF_FMT_RGB666) {
+		dma2_cfg |= DMA_DSTC0G_6BITS | DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
+		video_packet_parameter |= (MDDI_VDO_PACKET_DESC_RGB666 << 16);
+	}
 
 #ifdef CONFIG_MSM_MDP22
 	/* setup size, address, and stride */
@@ -341,7 +358,7 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 	/* set y & x offset and MDDI transaction parameters */
 	mdp_writel(mdp, (y << 16) | (x), MDP_CMD_DEBUG_ACCESS_BASE + 0x0194);
 	mdp_writel(mdp, ld_param, MDP_CMD_DEBUG_ACCESS_BASE + 0x01a0);
-	mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_PRIM,
+	mdp_writel(mdp, video_packet_parameter | MDDI_VDO_PACKET_PRIM,
 		   MDP_CMD_DEBUG_ACCESS_BASE + 0x01a4);
 
 	mdp_writel(mdp, dma2_cfg, MDP_CMD_DEBUG_ACCESS_BASE + 0x0180);
@@ -357,7 +374,7 @@ static void mdp_dma_to_mddi(void *priv, uint32_t addr, uint32_t stride,
 	/* set y & x offset and MDDI transaction parameters */
 	mdp_writel(mdp, (y << 16) | (x), MDP_DMA_P_OUT_XY);
 	mdp_writel(mdp, ld_param, MDP_MDDI_PARAM_WR_SEL);
-	mdp_writel(mdp, (MDDI_VDO_PACKET_DESC << 16) | MDDI_VDO_PACKET_PRIM,
+	mdp_writel(mdp, video_packet_parameter | MDDI_VDO_PACKET_PRIM,
 		   MDP_MDDI_PARAM);
 
 	mdp_writel(mdp, dma2_cfg, MDP_DMA_P_CONFIG);
@@ -373,7 +390,7 @@ void mdp_dma(struct mdp_device *mdp_dev, uint32_t addr, uint32_t stride,
 	struct mdp_out_interface *out_if;
 	unsigned long flags;
 
-	if (interface < 0 || interface > MSM_MDP_NUM_INTERFACES ||
+	if (interface < 0 || interface >= MSM_MDP_NUM_INTERFACES ||
 	    !mdp->out_if[interface].registered) {
 		pr_err("%s: Unknown interface: %d\n", __func__, interface);
 		BUG();
@@ -464,7 +481,7 @@ int mdp_check_output_format(struct mdp_device *mdp_dev, int bpp)
 int mdp_set_output_format(struct mdp_device *mdp_dev, int bpp)
 {
 	struct mdp_info *mdp = container_of(mdp_dev, struct mdp_info, mdp_dev);
-	uint32_t format, pack_pattern;
+	uint32_t format, pack_pattern = DMA_PACK_PATTERN_RGB;
 
 	switch (bpp) {
 	case 16:
@@ -494,6 +511,8 @@ int mdp_set_output_format(struct mdp_device *mdp_dev, int bpp)
 		mdp->pack_pattern = pack_pattern;
 		mdp->dma_config_dirty = true;
 	}
+
+	D("%s: format=%x, pack=%x\n", __func__, mdp->format, mdp->pack_pattern);
 
 	return 0;
 }
@@ -865,13 +884,13 @@ int mdp_probe(struct platform_device *pdev)
 	mdp->mdp_dev.check_output_format = mdp_check_output_format;
 	mdp->mdp_dev.configure_dma = mdp_configure_dma;
 
-	if (pdata == NULL || pdata->ignore_pixel_data_attr == 0)
-		mdp->mdp_dev.ignore_pixel_data_attr = 0;
-	else if(pdata->ignore_pixel_data_attr)
-		mdp->mdp_dev.ignore_pixel_data_attr = pdata->ignore_pixel_data_attr;
+	if (pdata == NULL || pdata->overrides == 0)
+		mdp->mdp_dev.overrides = 0;
+	else if(pdata->overrides)
+		mdp->mdp_dev.overrides = pdata->overrides;
 
 	if (pdata == NULL || pdata->color_format == 0)
-		mdp->mdp_dev.color_format = 0;
+		mdp->mdp_dev.color_format = MSM_MDP_OUT_IF_FMT_RGB565;
 	else if(pdata->color_format)
 		mdp->mdp_dev.color_format = pdata->color_format;
 

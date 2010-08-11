@@ -24,6 +24,20 @@ struct mddi_info;
 /* output interface format */
 #define MSM_MDP_OUT_IF_FMT_RGB565 0
 #define MSM_MDP_OUT_IF_FMT_RGB666 1
+#define MSM_MDP_OUT_IF_FMT_RGB888 2
+
+/* mdp override operations */
+#define MSM_MDP_PANEL_IGNORE_PIXEL_DATA		(1 << 0)
+#define MSM_MDP_PANEL_FLIP_UD			(1 << 1)
+#define MSM_MDP_PANEL_FLIP_LR			(1 << 2)
+#define MSM_MDP4_MDDI_DMA_SWITCH		(1 << 3)
+
+/* mddi type */
+#define MSM_MDP_MDDI_TYPE_I	 0
+#define MSM_MDP_MDDI_TYPE_II	 1
+
+/* lcdc override operations */
+#define MSM_MDP_LCDC_DMA_PACK_ALIGN_LSB		(1 << 0)
 
 struct msm_fb_data {
 	int xres;	/* x resolution in pixels */
@@ -42,12 +56,13 @@ enum {
 	MSM_MDDI_EMDH_INTERFACE,
 	MSM_EBI2_INTERFACE,
 	MSM_LCDC_INTERFACE,
+	MSM_TV_INTERFACE,
 
-	MSM_MDP_NUM_INTERFACES = MSM_LCDC_INTERFACE + 1,
+	MSM_MDP_NUM_INTERFACES = MSM_TV_INTERFACE + 1,
 };
 
 #define MSMFB_CAP_PARTIAL_UPDATES	(1 << 0)
-#define MSMFB_CAP_CABC (1 << 1)
+#define MSMFB_CAP_CABC			(1 << 1)
 
 struct msm_panel_data {
 	/* turns off the fb memory */
@@ -77,16 +92,15 @@ enum {
 	MDP_DMA_S,
 };
 
-enum {
-	COLOR_565 = 0,
-	COLOR_666,
-};
-
 struct msm_mdp_platform_data {
 	/* from the enum above */
 	int dma_channel;
-	unsigned ignore_pixel_data_attr;
+	unsigned overrides;
 	unsigned color_format;
+	int tearing_check;
+	unsigned sync_config;
+	unsigned sync_thresh;
+	unsigned sync_start_pos;
 };
 
 struct msm_mddi_client_data {
@@ -170,7 +184,16 @@ struct msm_lcdc_platform_data {
 	int				fb_id;
 	struct msm_fb_data		*fb_data;
 	struct resource			*fb_resource;
+	unsigned			 overrides;
 };
+
+struct msm_tvenc_platform_data {
+	struct msm_tvenc_panel_ops	*panel_ops;
+	int				fb_id;
+	struct msm_fb_data		*fb_data;
+	struct resource			*fb_resource;
+	int (*video_relay)(int on_off);
+ };
 
 struct mdp_blit_req;
 struct fb_info;
@@ -186,7 +209,7 @@ struct mdp_device {
 	void (*configure_dma)(struct mdp_device *mdp);
 	int (*check_output_format)(struct mdp_device *mdp, int bpp);
 	int (*set_output_format)(struct mdp_device *mdp, int bpp);
-	unsigned ignore_pixel_data_attr;
+	unsigned overrides;
 	unsigned color_format;
 };
 
