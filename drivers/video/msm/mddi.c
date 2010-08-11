@@ -600,7 +600,7 @@ void mddi_remote_write_vals(struct msm_mddi_client_data *cdata, uint8_t * val,
 
 	ll->flags = 1;
 	ll->header_count = 14;
-	ll->data_count = 4;
+	ll->data_count = nr_bytes;
 
 	if (nr_bytes == 4) {
 		uint32_t *prm = (uint32_t *)val;
@@ -650,7 +650,7 @@ inline void mddi_remote_write(struct msm_mddi_client_data *cdata, uint32_t val,
 		uint32_t reg)
 {
 	uint8_t * p = (uint8_t *) &val;
-	mddi_remote_write_vals(cdata, p, reg, sizeof(uint32_t));
+	mddi_remote_write_vals(cdata, p, reg, 4);
 }
 
 uint32_t mddi_remote_read(struct msm_mddi_client_data *cdata, uint32_t reg)
@@ -689,6 +689,7 @@ uint32_t mddi_remote_read(struct msm_mddi_client_data *cdata, uint32_t reg)
 
 	ri.reg = reg;
 	ri.status = -1;
+	ri.result = -1;
 
 	do {
 		init_completion(&ri.done);
@@ -852,9 +853,13 @@ static int __init mddi_probe(struct platform_device *pdev)
 		goto error_request_irq;
 	}
 
+#if 0
+	//XXX: Oddly enough, if we power up the chip here, it turns the
+	//     panel OFF!
 	/* turn on the mddi client bridge chip */
 	if (mddi->power_client)
 		mddi->power_client(&mddi->client_data, 1);
+#endif
 
 	/* initialize the mddi registers */
 	mddi_set_auto_hibernate(&mddi->client_data, 0);

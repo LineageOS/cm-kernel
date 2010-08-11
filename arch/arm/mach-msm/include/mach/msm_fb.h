@@ -47,6 +47,7 @@ enum {
 };
 
 #define MSMFB_CAP_PARTIAL_UPDATES	(1 << 0)
+#define MSMFB_CAP_CABC (1 << 1)
 
 struct msm_panel_data {
 	/* turns off the fb memory */
@@ -57,9 +58,11 @@ struct msm_panel_data {
 	int (*blank)(struct msm_panel_data *);
 	/* turns on the panel */
 	int (*unblank)(struct msm_panel_data *);
+	int (*shutdown)(struct msm_panel_data *);
 	void (*wait_vsync)(struct msm_panel_data *);
 	void (*request_vsync)(struct msm_panel_data *, struct msmfb_callback *);
 	void (*clear_vsync)(struct msm_panel_data *);
+	void (*dump_vsync)(void);
 	/* from the enum above */
 	unsigned interface_type;
 	/* data to be passed to the fb driver */
@@ -183,6 +186,8 @@ struct mdp_device {
 	void (*configure_dma)(struct mdp_device *mdp);
 	int (*check_output_format)(struct mdp_device *mdp, int bpp);
 	int (*set_output_format)(struct mdp_device *mdp, int bpp);
+	unsigned ignore_pixel_data_attr;
+	unsigned color_format;
 };
 
 struct class_interface;

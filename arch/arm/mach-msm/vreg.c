@@ -22,6 +22,12 @@
 
 #include "proc_comm.h"
 
+#ifdef VREG_DEBUG
+#define D(x...) printk(KERN_DEBUG x)
+#else
+#define D(x...) do {} while (0)
+#endif
+
 struct vreg {
 	const char *name;
 	unsigned id;
@@ -66,6 +72,7 @@ static struct vreg vregs[] = {
 struct vreg *vreg_get(struct device *dev, const char *id)
 {
 	int n;
+	D("%s: %s, devptr=%p\n", __func__, id, dev);
 	for (n = 0; n < ARRAY_SIZE(vregs); n++) {
 		if (!strcmp(vregs[n].name, id))
 			return vregs + n;
@@ -81,6 +88,7 @@ int vreg_enable(struct vreg *vreg)
 {
 	unsigned id = vreg->id;
 	unsigned enable = 1;
+	D("%s: %s(%u)\n", __func__, vreg->name, vreg->id);
 	return msm_proc_comm(PCOM_VREG_SWITCH, &id, &enable);
 }
 
@@ -88,12 +96,14 @@ void vreg_disable(struct vreg *vreg)
 {
 	unsigned id = vreg->id;
 	unsigned enable = 0;
+	D("%s: %s(%u)\n", __func__, vreg->name, vreg->id);
 	msm_proc_comm(PCOM_VREG_SWITCH, &id, &enable);
 }
 
 int vreg_set_level(struct vreg *vreg, unsigned mv)
 {
 	unsigned id = vreg->id;
+	D("%s: %s(%u) => %u\n", __func__, vreg->name, vreg->id, mv);
 	return msm_proc_comm(PCOM_VREG_SET_LEVEL, &id, &mv);
 }
 

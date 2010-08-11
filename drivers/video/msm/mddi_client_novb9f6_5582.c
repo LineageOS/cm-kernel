@@ -46,8 +46,6 @@ static void novtec_request_vsync(struct msm_panel_data *panel_data,
 						panel_data);
 	struct msm_mddi_client_data *client_data = panel->client_data;
 
-printk("%s, gotint=%d\n", __func__, panel->novtec_got_int);
-
 	panel->novtec_callback = callback;
 	if (panel->novtec_got_int) {
 		panel->novtec_got_int = 0;
@@ -61,7 +59,6 @@ static void novtec_clear_vsync(struct msm_panel_data *panel_data)
 						panel_data);
 	struct msm_mddi_client_data *client_data = panel->client_data;
 
-printk("%s\n", __func__);
 	client_data->activate_link(client_data);
 }
 
@@ -71,7 +68,6 @@ static void novtec_wait_vsync(struct msm_panel_data *panel_data)
 						panel_data);
 	struct msm_mddi_client_data *client_data = panel->client_data;
 
-printk("%s\n", __func__);
 	if (panel->novtec_got_int) {
 		panel->novtec_got_int = 0;
 		client_data->activate_link(client_data); /* clears interrupt */
@@ -92,7 +88,6 @@ static int novtec_suspend(struct msm_panel_data *panel_data)
 	struct msm_mddi_bridge_platform_data *bridge_data =
 		client_data->private_client_data;
 	int ret;
-printk("%s\n", __func__);
 
 	wake_lock(&panel->idle_lock);
 	ret = bridge_data->uninit(bridge_data, client_data);
@@ -115,7 +110,6 @@ static int novtec_resume(struct msm_panel_data *panel_data)
 	struct msm_mddi_bridge_platform_data *bridge_data =
 		client_data->private_client_data;
 	int ret;
-printk("%s\n", __func__);
 
 	wake_lock(&panel->idle_lock);
 	client_data->resume(client_data);
@@ -134,7 +128,6 @@ static int novtec_blank(struct msm_panel_data *panel_data)
 	struct msm_mddi_bridge_platform_data *bridge_data =
 		client_data->private_client_data;
 
-printk("%s\n", __func__);
 	return bridge_data->blank(bridge_data, client_data);
 }
 
@@ -146,7 +139,6 @@ static int novtec_unblank(struct msm_panel_data *panel_data)
 	struct msm_mddi_bridge_platform_data *bridge_data =
 		client_data->private_client_data;
 
-printk("%s\n", __func__);
 	return bridge_data->unblank(bridge_data, client_data);
 }
 
@@ -154,7 +146,6 @@ static irqreturn_t novtec_vsync_interrupt(int irq, void *data)
 {
 	struct panel_info *panel = data;
 
-printk("%s\n", __func__);
 	panel->novtec_got_int = 1;
 	if (panel->novtec_callback) {
 //		mdelay(3);
@@ -181,8 +172,6 @@ static int mddi_novtec_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	platform_set_drvdata(pdev, panel);
 
-	printk(KERN_DEBUG "%s: pdev.name=%s, numres=%d\n", __func__, pdev->name, pdev->num_resources);
-
 #if 0
 	if (panel_data->caps & MSMFB_CAP_CABC) {
 #else
@@ -193,14 +182,12 @@ static int mddi_novtec_probe(struct platform_device *pdev)
 		platform_device_register(&mddi_nov_cabc);
 	}
 
-	gpio_request(98, "vsync");
-	gpio_direction_input(98);
-
 	ret = platform_get_irq_byname(pdev, "vsync");
 	if (ret < 0)
 		goto err_plat_get_irq;
 
 	panel->irq = ret;
+	printk(KERN_DEBUG "%s: Requesting irq=%d; value=%d\n", __func__, ret, gpio_get_value(98));
 	ret = request_irq(panel->irq, novtec_vsync_interrupt,
 			  IRQF_TRIGGER_FALLING, "vsync", panel);
 	if (ret) {
@@ -227,7 +214,6 @@ static int mddi_novtec_probe(struct platform_device *pdev)
 	platform_device_register(&panel->pdev);
 	wake_lock_init(&panel->idle_lock, WAKE_LOCK_IDLE, "nov_idle_lock");
 
-novtec_clear_vsync(&panel->panel_data);
 	return 0;
 
 err_req_irq:
