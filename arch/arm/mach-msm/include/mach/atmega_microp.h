@@ -138,7 +138,6 @@ struct microp_function_config {
 	uint8_t		mask_r[3];
 	uint8_t		mask_w[3];
 	uint32_t	ls_gpio_on;
-	uint16_t	metrico_adc[2];
 	int (*ls_power)(int, uint8_t);
 };
 
@@ -205,7 +204,8 @@ struct microp_led_data {
 };
 
 struct microp_i2c_client_data {
-	struct mutex microp_i2c_mutex;
+	struct mutex microp_adc_mutex;
+	struct mutex microp_i2c_rw_mutex;
 	uint16_t version;
 	struct workqueue_struct *microp_queue;
 	struct work_struct microp_intr_work;
@@ -237,11 +237,6 @@ struct lightsensor_platform_data{
 	int old_intr_cmd;
 };
 
-struct microp_oj_callback {
-	void (*oj_init)(void);
-	void (*oj_intr)(void);
-};
-
 struct microp_ops {
 	int (*init_microp_func)(struct i2c_client *);
 	int (*als_pwr_enable)(int pwr_device, uint8_t en);
@@ -262,10 +257,7 @@ int microp_write_interrupt(struct i2c_client *client,
 		uint16_t interrupt, uint8_t enable);
 void microp_get_als_kvalue(int i);
 int microp_spi_vote_enable(int spi_device, uint8_t enable);
-int microp_register_oj_callback(struct microp_oj_callback *oj);
 void microp_register_ops(struct microp_ops *ops);
-int microp_notify_unplug_mic(void);
-int microp_notify_mic_value(void);
 int microp_read_adc(uint8_t *data);
 void microp_mobeam_enable(int enable);
 

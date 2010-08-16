@@ -27,8 +27,6 @@
 #include <linux/android_pmem.h>
 // #include <linux/synaptics_t1007.h>
 #include <linux/input.h>
-#include <mach/htc_headset.h>
-#include <mach/audio_jack.h>
 #include <linux/akm8973.h>
 #include <linux/bma150.h>
 #include <linux/capella_cm3602.h>
@@ -58,6 +56,11 @@
 #include <mach/msm_flashlight.h>
 #include <linux/atmel_qt602240.h>
 #include <mach/vreg.h>
+
+#include <mach/htc_headset_mgr.h>
+#include <mach/htc_headset_gpio.h>
+#include <mach/htc_headset_microp.h>
+
 #ifdef CONFIG_MICROP_COMMON
 #include <mach/atmega_microp.h>
 #endif
@@ -104,13 +107,6 @@ static struct platform_device htc_battery_pdev = {
 #ifdef CONFIG_MICROP_COMMON
 static int capella_cm3602_power(int pwr_device, uint8_t enable);
 static struct microp_function_config microp_functions[] = {
-	{
-		.name   = "remote-key",
-		.category = MICROP_FUNCTION_REMOTEKEY,
-		.levels = {0, 33, 50, 110, 160, 220},
-		.channel = 1,
-		.int_pin = 1 << 7,
-	},
 	{
 		.name   = "reset-int",
 		.category = MICROP_FUNCTION_RESET_INT,
@@ -161,7 +157,7 @@ static struct bma150_platform_data supersonic_g_sensor_pdata = {
 static int __capella_cm3602_power(int on)
 {
 	int ret;
-	struct vreg *vreg = vreg_get(0, "gp1");;
+	struct vreg *vreg = vreg_get(0, "gp1");
 	if (!vreg) {
 		printk(KERN_ERR "%s: vreg error\n", __func__);
 		return -EIO;
@@ -215,6 +211,13 @@ static struct capella_cm3602_platform_data capella_cm3602_pdata = {
 };
 /* End Proximity Sensor (Capella_CM3602)*/
 
+static struct htc_headset_microp_platform_data htc_headset_microp_data = {
+	.remote_int   = 1 << 7,
+	.remote_irq   = MSM_uP_TO_INT(7),
+	.remote_enable_pin  = 0,
+	.adc_channel    = 0x01,
+	.adc_remote   = {0, 33, 50, 110, 160, 220},
+};
 
 static struct platform_device microp_devices[] = {
 	{
@@ -241,6 +244,13 @@ static struct platform_device microp_devices[] = {
 		.id = -1,
 		.dev = {
 			.platform_data = &capella_cm3602_pdata,
+		},
+	},
+  {
+		.name = "HTC_HEADSET_MICROP",
+		.id = -1,
+		.dev  = {
+			.platform_data  = &htc_headset_microp_data,
 		},
 	},
 };
@@ -283,9 +293,12 @@ static int supersonic_phy_init_seq[] = { 0xC, 0x31, 0x30, 0x32, 0x1D, 0x0D, 0x1D
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.phy_init_seq = supersonic_phy_init_seq,
 	.usb_connected = notify_usb_connected,
-// XXX: Car kit
-//	.usb_id_pin_gpio = SUPERSONIC_GPIO_USB_ID_PIN,
-//	.config_usb_id_gpios = config_supersonic_usb_id_gpios,
+#if 0
+	// HTC 2.6.32
+	.usb_id_pin_gpio =  SUPERSONIC_GPIO_USB_ID_PIN,
+	.accessory_detect = 1, /* detect by ID pin gpio */
+	.usb_uart_switch = supersonic_uart_usb_switch,
+#endif
 };
 
 
@@ -446,6 +459,28 @@ static void supersonic_uart_usb_switch(int uart)
 		}
 	}
 }
+
+static int __init board_serialno_setup(char *serialno)
+{
+#ifdef CONFIG_USB_ANDROID_RNDIS
+	int i;
+	char *src = serialno;
+
+	/* create a fake MAC address from our serial number.
+	 * first byte is 0x02 to signify locally administered.
+	 */
+	rndis_pdata.ethaddr[0] = 0x02;
+	for (i = 0; *src; i++) {
+		/* XOR the USB serial across the remaining bytes */
+	rndis_pdata.ethaddr[i % (ETH_ALEN - 1) + 1] ^= *src++;
+	}
+#endif
+
+	android_usb_pdata.serial_number = serialno;
+	return 1;
+}
+__setup("androidboot.serialno=", board_serialno_setup);
+
 
 static struct platform_device supersonic_rfkill = {
 	.name = "supersonic_rfkill",
@@ -796,26 +831,28 @@ static struct regulator_init_data tps65023_data[5] = {
 	},
 };
 
-static struct h2w_platform_data supersonic_h2w_data = {
+static struct htc_headset_mgr_platform_data htc_headset_mgr_data = {
 };
 
-static struct platform_device supersonic_h2w = {
-	.name		= "htc_headset",
-	.id			= -1,
-	.dev		= {
-		.platform_data	= &supersonic_h2w_data,
+static struct platform_device htc_headset_mgr = {
+	.name = "HTC_HEADSET_MGR",
+	.id = -1,
+	.dev  = {
+		.platform_data  = &htc_headset_mgr_data,
 	},
 };
 
-static struct audio_jack_platform_data supersonic_jack_data = {
-	.gpio	= SUPERSONIC_GPIO_35MM_HEADSET_DET,
+static struct htc_headset_gpio_platform_data htc_headset_gpio_data = {
+	.hpin_gpio    = SUPERSONIC_GPIO_35MM_HEADSET_DET,
+	.key_enable_gpio  = 0,
+	.mic_select_gpio  = 0,
 };
 
-static struct platform_device supersonic_audio_jack = {
-	.name		= "audio-jack",
-	.id			= -1,
-	.dev		= {
-		.platform_data	= &supersonic_jack_data,
+static struct platform_device htc_headset_gpio = {
+	.name = "HTC_HEADSET_GPIO",
+	.id = -1,
+	.dev  = {
+		.platform_data  = &htc_headset_gpio_data,
 	},
 };
 
@@ -1081,9 +1118,9 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_SERIAL_MSM_HS
 	&msm_device_uart_dm1,
 #endif
-	&supersonic_h2w,
 	&htc_battery_pdev,
-	&supersonic_audio_jack,
+	&htc_headset_mgr,
+	&htc_headset_gpio,
 	&ram_console_device,
 	&supersonic_rfkill,
 	&msm_device_smd,
@@ -1152,20 +1189,11 @@ static struct msm_acpu_clock_platform_data supersonic_clock_data = {
 int supersonic_init_mmc(int sysrev);
 
 #ifdef CONFIG_SERIAL_MSM_HS
-extern void supersonic_config_bt_disable_active(void);
-extern void supersonic_config_bt_disable_sleep(void);
-extern int supersonic_is_bluetooth_off(void);
 
 static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 	.rx_wakeup_irq = MSM_GPIO_TO_INT(SUPERSONIC_GPIO_BT_HOST_WAKE),	/*Chip to Device*/
 	.inject_rx_on_wakeup = 0,
 	.exit_lpm_cb = bcm_bt_lpm_exit_lpm_locked,
-
-#if 0
-	.config_as_uart = supersonic_config_bt_disable_active,
-	.config_as_gpio = supersonic_config_bt_disable_sleep,
-	.need_config = supersonic_is_bluetooth_off,
-#endif
 };
 
 static struct bcm_bt_lpm_platform_data bcm_bt_lpm_pdata = {
@@ -1257,9 +1285,6 @@ static void __init supersonic_init(void)
 
 	OJ_BMA_power();
 
-	gpio_request(SUPERSONIC_GPIO_PROXIMITY_EN_N, "proximity_en");
-	gpio_direction_output(SUPERSONIC_GPIO_PROXIMITY_EN_N, 0);
-
 	msm_acpu_clock_init(&supersonic_clock_data);
 
 #if defined(CONFIG_MSM_SERIAL_DEBUGGER)
@@ -1280,11 +1305,12 @@ static void __init supersonic_init(void)
 	msm_device_spi.dev.platform_data = &supersonic_spi_pdata;
 #endif
 
-	#ifdef CONFIG_SERIAL_MSM_HS
+#ifdef CONFIG_SERIAL_MSM_HS
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
 	msm_device_uart_dm1.name = "msm_serial_hs_bcm";	/* for bcm */
-	#endif
+#endif
 
+	config_gpio_table(usb_phy_3v3_table, ARRAY_SIZE(usb_phy_3v3_table));
 	config_gpio_table(camera_off_gpio_table,
 		ARRAY_SIZE(camera_off_gpio_table));
 	gpio_request(SUPERSONIC_GPIO_TP_EN, "tp_en");
@@ -1315,9 +1341,6 @@ static void __init supersonic_init(void)
 		pr_err("failed to create board_properties\n");
 
 	msm_init_pmic_vibrator();
-	config_gpio_table(usb_phy_3v3_table, ARRAY_SIZE(usb_phy_3v3_table));
-	gpio_set_value(SUPERSONIC_USB_PHY_3V3_ENABLE, 1);
-
 }
 
 static void __init supersonic_fixup(struct machine_desc *desc, struct tag *tags,

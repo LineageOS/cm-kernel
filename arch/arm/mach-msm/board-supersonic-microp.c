@@ -307,7 +307,7 @@ static int capella_cm3602_probe(struct platform_device *pdev)
 
 	pr_info("%s: probe\n", __func__);
 
-	pdata = pdev->dev.platform_data;
+	pdata = dev_get_platdata(&pdev->dev);
 
 	ip = &the_data;
 	platform_set_drvdata(pdev, ip);

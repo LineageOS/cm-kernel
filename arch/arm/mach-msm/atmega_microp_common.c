@@ -13,7 +13,6 @@
 
 #include <linux/kernel.h>
 #include <linux/init.h>
-#include <linux/leds.h>
 #include <linux/workqueue.h>
 #include <linux/i2c.h>
 #include <linux/delay.h>
@@ -24,7 +23,6 @@
 #include <asm/mach-types.h>
 #include <linux/earlysuspend.h>
 #include <mach/drv_callback.h>
-#include <mach/htc_35mm_remote.h>
 #include <linux/wakelock.h>
 #include <linux/miscdevice.h>
 #include <linux/lightsensor.h>
@@ -37,24 +35,9 @@
 #define I2C_WRITE_RETRY_TIMES			10
 #define MICROP_I2C_WRITE_BLOCK_SIZE		80
 
-#ifdef CONFIG_HTC_HEADSET
-#define notify_35mm_headset_insert(insert) \
-	htc_35mm_remote_notify_insert_ext_headset(insert)
-#define notify_35mm_button_status(key_level) \
-	htc_35mm_remote_notify_button_status(key_level)
-#else
-#define notify_35mm_headset_insert(insert) do {} while (0)
-#define notify_35mm_button_status(key_level) do {} while (0)
-#endif
-
-int __init microp_led_init(void);
-void microp_led_exit(void);
-
 static struct i2c_client *private_microp_client;
-static struct microp_oj_callback *oj_callback;
 static struct microp_ops *board_ops;
 
-static int is_35mm_hpin;
 static int microp_rw_delay;
 
 static char *hex2string(uint8_t *data, int len)
@@ -76,28 +59,31 @@ static int i2c_read_block(struct i2c_client *client, uint8_t addr,
 	uint8_t *data, int length)
 {
 	int retry;
+	struct microp_i2c_client_data *cdata;
 	struct i2c_msg msgs[] = {
-	{
-		.addr = client->addr,
-		.flags = 0,
-		.len = 1,
-		.buf = &addr,
-	},
-	{
-		.addr = client->addr,
-		.flags = I2C_M_RD,
-		.len = length,
-		.buf = data,
-	}
+		{
+			.addr = client->addr,
+			.flags = 0,
+			.len = 1,
+			.buf = &addr,
+		},
+		{
+			.addr = client->addr,
+			.flags = I2C_M_RD,
+			.len = length,
+			.buf = data,
+		}
 	};
 
-	mdelay(1);
+	cdata = i2c_get_clientdata(client);
+	mutex_lock(&cdata->microp_i2c_rw_mutex);
+	msleep(1);
 	for (retry = 0; retry <= I2C_READ_RETRY_TIMES; retry++) {
 		if (i2c_transfer(client->adapter, msgs, 2) == 2)
 			break;
-		mdelay(microp_rw_delay);
+		msleep(microp_rw_delay);
 	}
-
+	mutex_unlock(&cdata->microp_i2c_rw_mutex);
 	dev_dbg(&client->dev, "R [%02X] = %s\n",
 			addr, hex2string(data, length));
 
@@ -116,19 +102,20 @@ static int i2c_write_block(struct i2c_client *client, uint8_t addr,
 	int retry;
 	uint8_t buf[MICROP_I2C_WRITE_BLOCK_SIZE];
 	int i;
-
+	struct microp_i2c_client_data *cdata;
 	struct i2c_msg msg[] = {
-	{
-		.addr = client->addr,
-		.flags = 0,
-		.len = length + 1,
-		.buf = buf,
-	}
+		{
+			.addr = client->addr,
+			.flags = 0,
+			.len = length + 1,
+			.buf = buf,
+		}
 	};
 
 	dev_dbg(&client->dev, "W [%02X] = %s\n",
 			addr, hex2string(data, length));
 
+	cdata = i2c_get_clientdata(client);
 	if (length + 1 > MICROP_I2C_WRITE_BLOCK_SIZE) {
 		dev_err(&client->dev, "i2c_write_block length too long\n");
 		return -E2BIG;
@@ -138,19 +125,22 @@ static int i2c_write_block(struct i2c_client *client, uint8_t addr,
 	for (i = 0; i < length; i++)
 		buf[i+1] = data[i];
 
-	mdelay(1);
+	mutex_lock(&cdata->microp_i2c_rw_mutex);
+	msleep(1);
 	for (retry = 0; retry <= I2C_WRITE_RETRY_TIMES; retry++) {
 		if (i2c_transfer(client->adapter, msg, 1) == 1)
 			break;
-		mdelay(microp_rw_delay);
+		msleep(microp_rw_delay);
 	}
 	if (retry > I2C_WRITE_RETRY_TIMES) {
 		dev_err(&client->dev, "i2c_write_block retry over %d\n",
 			I2C_WRITE_RETRY_TIMES);
+		mutex_unlock(&cdata->microp_i2c_rw_mutex);
 		return -EIO;
 	}
 	if (addr == MICROP_I2C_WCMD_LCM_BURST_EN)
 		udelay(500);/*1.5ms for microp SPI write */
+	mutex_unlock(&cdata->microp_i2c_rw_mutex);
 
 	return 0;
 }
@@ -199,18 +189,6 @@ void microp_mobeam_enable(int enable)
 		microp_rw_delay = 5;
 }
 EXPORT_SYMBOL(microp_mobeam_enable);
-
-int microp_register_oj_callback(struct microp_oj_callback *oj)
-{
-	oj_callback = oj;
-
-	if (private_microp_client != NULL) {
-		oj_callback->oj_init = NULL;
-		return 0;
-	}
-
-	return 1;
-}
 
 void microp_register_ops(struct microp_ops *ops)
 {
@@ -266,7 +244,7 @@ int microp_read_adc(uint8_t *data)
 	client = private_microp_client;
 	cdata = i2c_get_clientdata(client);
 
-	mutex_lock(&cdata->microp_i2c_mutex);
+	mutex_lock(&cdata->microp_adc_mutex);
 	if (i2c_write_block(client, MICROP_I2C_WCMD_READ_ADC_VALUE_REQ,
 			data, 2) < 0) {
 		dev_err(&client->dev, "%s: request adc fail\n", __func__);
@@ -280,7 +258,7 @@ int microp_read_adc(uint8_t *data)
 		goto exit;
 	}
 exit:
-	mutex_unlock(&cdata->microp_i2c_mutex);
+	mutex_unlock(&cdata->microp_adc_mutex);
 	return ret;
 }
 
@@ -306,40 +284,6 @@ int microp_read_gpio_status(uint8_t *data)
 		return -EIO;
 	}
 	return 0;
-}
-
-static int get_remote_keycode(uint8_t *data)
-{
-	struct i2c_client *client = private_microp_client;
-
-	memset(data, 0x00, sizeof(data));
-	if (i2c_read_block(client, MICROP_I2C_RCMD_REMOTE_KEYCODE,
-			data, 2) < 0) {
-		dev_err(&client->dev, "%s: read remote keycode fail\n", __func__);
-		return -EIO;
-	}
-	if (!data[1])
-		return 1;			/*no keycode*/
-	else if (data[1] & 0x80)
-		data[1] = 0x00;	/*release keycode*/
-
-	return 0;
-}
-
-static void microp_hpin_work_func(struct work_struct *work)
-{
-	struct i2c_client *client;
-	struct microp_i2c_client_data *cdata;
-	int ret = 0;
-
-	client = private_microp_client;
-	cdata = i2c_get_clientdata(client);
-
-	ret = microp_write_interrupt(client,
-				cdata->int_pin.int_remotekey, 1);
-	if (ret < 0)
-		printk(KERN_ERR "%s: set remote key interrupt error\n",
-			__func__);
 }
 
 static void microp_pm_power_off(struct i2c_client *client)
@@ -394,7 +338,7 @@ int microp_spi_vote_enable(int spi_device, uint8_t enable)
 	if (spi_device == SPI_OJ)
 		microp_oj_intr_enable(client, enable);
 
-	mutex_lock(&cdata->microp_i2c_mutex);
+	mutex_lock(&cdata->microp_adc_mutex);
 	if (enable)
 		cdata->spi_devices_vote |= spi_device;
 	else
@@ -414,13 +358,13 @@ int microp_spi_vote_enable(int spi_device, uint8_t enable)
 		enable = 1;
 	else
 		enable = 0;
-	mutex_unlock(&cdata->microp_i2c_mutex);
+	mutex_unlock(&cdata->microp_adc_mutex);
 
 	ret = microp_spi_enable(client, enable);
 	return ret;
 
 exit:
-	mutex_unlock(&cdata->microp_i2c_mutex);
+	mutex_unlock(&cdata->microp_adc_mutex);
 	return ret;
 
 }
@@ -437,98 +381,6 @@ static void microp_reset_microp(struct i2c_client *client)
 	udelay(120);
 	gpio_set_value(pdata->gpio_reset, 1);
 	mdelay(5);
-}
-
-int microp_notify_mic_value(void)
-{
-	struct i2c_client *client;
-	struct microp_i2c_client_data *cdata;
-	struct microp_i2c_platform_data *pdata;
-	uint8_t data[2], node = 0;
-	int ret = 0;
-	int mic_adc = 0;
-	uint16_t metrico_adc[2];
-
-	client = private_microp_client;
-	if (!client)	{
-		printk(KERN_ERR "%s: dataset: client is empty\n", __func__);
-		return -EIO;
-	}
-	cdata = i2c_get_clientdata(client);
-	pdata = client->dev.platform_data;
-
-	node = pdata->function_node[MICROP_FUNCTION_REMOTEKEY];
-	data[0] = 0x00;
-	data[1] = pdata->microp_function[node].channel;
-	microp_read_adc(data);
-
-	mic_adc = data[0] << 8 | data[1];
-	metrico_adc[0] = pdata->microp_function[node].metrico_adc[0];
-	metrico_adc[1] = pdata->microp_function[node].metrico_adc[1];
-
-	if (metrico_adc[0] && metrico_adc[1] &&
-	    mic_adc >= metrico_adc[0] && mic_adc <= metrico_adc[1])
-		ret = HEADSET_METRICO; /* For HW Metrico lab test */
-	else if (mic_adc >= 200)
-		ret = HEADSET_MIC;
-	else
-		ret = HEADSET_NO_MIC;
-
-	schedule_delayed_work(&cdata->hpin_enable_intr_work,
-			      msecs_to_jiffies(700));
-	printk(KERN_DEBUG "%s: microp_mic_status = %d, ADC = %d (0x%X)\n",
-	       __func__, ret, mic_adc, mic_adc);
-	is_35mm_hpin = 1;
-
-	return ret;
-}
-
-int microp_notify_unplug_mic(void)
-{
-	struct microp_i2c_platform_data *pdata;
-	struct i2c_client *client = private_microp_client;
-	struct microp_i2c_client_data *cdata;
-	int ret;
-
-	is_35mm_hpin = 0;
-
-	if (!client)	{
-		dev_err(&client->dev, "%s: dataset: client is empty\n",
-				__func__);
-		return -1;
-	}
-	pdata = client->dev.platform_data;
-	cdata = i2c_get_clientdata(client);
-
-	ret = microp_write_interrupt(client,
-				cdata->int_pin.int_remotekey, 0);
-	if (ret < 0)
-		dev_err(&client->dev, "%s: set remote key interrupt error\n",
-				__func__);
-
-	printk(KERN_INFO"%s: headset plug out\n", __func__);
-
-	return ret;
-}
-
-static void hpin_debounce_do_work(struct work_struct *work)
-{
-	uint8_t data[3];
-	struct microp_i2c_client_data *cdata;
-	int insert = 0;
-	struct i2c_client *client;
-
-	client = private_microp_client;
-	cdata = i2c_get_clientdata(client);
-
-	microp_read_gpio_status(data);
-	insert = (((data[0] << 16 | data[1] << 8 | data[2])
-			& cdata->gpio.hpin) == 0)
-			? 1 : 0;
-	if (insert != cdata->headset_is_in) {
-		cdata->headset_is_in = insert;
-		notify_35mm_headset_insert(cdata->headset_is_in);
-	}
 }
 
 static ssize_t microp_version_show(struct device *dev,
@@ -567,30 +419,6 @@ static ssize_t microp_reset_store(struct device *dev,
 }
 
 static DEVICE_ATTR(reset, 0644, NULL, microp_reset_store);
-
-static ssize_t microp_remotekey_adc_show(struct device *dev,
-				  struct device_attribute *attr, char *buf)
-{
-	struct i2c_client *client;
-	struct microp_i2c_platform_data *pdata;
-	uint8_t data[3], node = 0;
-	int ret;
-
-	client = to_i2c_client(dev);
-	pdata = client->dev.platform_data;
-
-	node = pdata->function_node[MICROP_FUNCTION_REMOTEKEY];
-	data[0] = 0x00;
-	data[1] = pdata->microp_function[node].channel;
-	microp_read_adc(data);
-	ret = sprintf(buf,
-				"Remote Key[0x%03X] => button %d\n",
-				(data[0] << 8 | data[1]), data[2]);
-
-	return ret;
-}
-
-static DEVICE_ATTR(key_adc, 0644, microp_remotekey_adc_show, NULL);
 
 static ssize_t microp_gpio_show(struct device *dev,
 				  struct device_attribute *attr, char *buf)
@@ -645,7 +473,7 @@ static irqreturn_t microp_intr_irq_handler(int irq, void *dev_id)
 	client = to_i2c_client(dev_id);
 	cdata = i2c_get_clientdata(client);
 
-	disable_irq(client->irq);
+	disable_irq_nosync(client->irq);
 	queue_work(cdata->microp_queue, &cdata->microp_intr_work);
 	return IRQ_HANDLED;
 }
@@ -680,9 +508,9 @@ static void microp_intr_work_func(struct work_struct *work)
 	struct i2c_client *client = private_microp_client;
 	struct microp_i2c_client_data *cdata;
 	struct microp_i2c_platform_data *pdata;
-	uint8_t data[3], node = 0;
+	uint8_t data[3];
 	uint16_t intr_status = 0;
-	int sd_insert = 0, keycode = 0;
+	int sd_insert = 0;
 	ktime_t zero_debounce;
 
 	zero_debounce = ktime_set(0, 0);  /* No debounce time */
@@ -705,32 +533,7 @@ static void microp_intr_work_func(struct work_struct *work)
 			data, 2) < 0)
 		dev_err(&client->dev, "%s: clear interrupt status fail\n",
 				__func__);
-	cdata->intr_status = intr_status;
 
-	hrtimer_start(&cdata->gen_irq_timer, zero_debounce, HRTIMER_MODE_REL);
-
-	if (intr_status & cdata->int_pin.int_remotekey) {
-		node = pdata->function_node[MICROP_FUNCTION_REMOTEKEY];
-		if (get_remote_keycode(data) == 0) {
-			keycode = (int)data[1];
-
-			if (cdata->int_pin.int_hpin) {
-				if (cdata->headset_is_in)
-					notify_35mm_button_status(keycode);
-			} else
-				if (is_35mm_hpin)
-					notify_35mm_button_status(keycode);
-		}
-	}
-	if (intr_status & cdata->int_pin.int_oj) {
-		data[0] = 0x00;
-		if (i2c_write_block(client, MICROP_I2C_WCMD_OJ_INT_STATUS,
-				data, 1) < 0)
-			dev_err(&client->dev, "%s: clear OJ interrupt status fail\n",
-				__func__);
-		if (oj_callback && oj_callback->oj_intr)
-			oj_callback->oj_intr();
-	}
 	if (intr_status & cdata->int_pin.int_reset) {
 		dev_info(&client->dev, "Reset button is pressed\n");
 		microp_reset_system();
@@ -751,15 +554,9 @@ static void microp_intr_work_func(struct work_struct *work)
 			cnf_driver_event("sdcard_detect", &cdata->sdcard_is_in);
 		}
 	}
-	if (intr_status & cdata->int_pin.int_hpin) {
-		wake_lock_timeout \
-					(&cdata->hpin_wake_lock, 3*HZ);
-		dev_info(&client->dev, "HPIN insert/remove\n");
-		if (!cdata->headset_is_in)
-			schedule_delayed_work(&cdata->hpin_debounce_work, msecs_to_jiffies(500));
-		else
-			schedule_delayed_work(&cdata->hpin_debounce_work, msecs_to_jiffies(300));
-	}
+
+	cdata->intr_status = intr_status;
+	hrtimer_start(&cdata->gen_irq_timer, zero_debounce, HRTIMER_MODE_REL);
 	enable_irq(client->irq);
 }
 
@@ -816,10 +613,8 @@ static int __devexit microp_i2c_remove(struct i2c_client *client)
 
 	device_remove_file(&client->dev, &dev_attr_reset);
 	device_remove_file(&client->dev, &dev_attr_version);
-	device_remove_file(&client->dev, &dev_attr_key_adc);
 	device_remove_file(&client->dev, &dev_attr_gpio);
 	destroy_workqueue(cdata->microp_queue);
-	microp_led_exit();
 	kfree(cdata);
 
 	return 0;
@@ -839,21 +634,31 @@ static int microp_i2c_resume(struct i2c_client *client)
 static void register_microp_devices(struct platform_device *devices, int num)
 {
 	int i;
-	printk(KERN_DEBUG "Registering %d microp devices\n", num);
 	for (i = 0; i < num; i++) {
-		printk(KERN_DEBUG "  #%d: %s\n", i, devices[i].name);
-		dev_set_drvdata(&devices[i].dev, private_microp_client);
-		platform_device_register(&devices[i]);
+		platform_device_register(devices + i);
+		dev_set_drvdata(&(devices + i)->dev, private_microp_client);
 	}
 }
 
-static int microp_i2c_probe(struct i2c_client *client,
-		const struct i2c_device_id *id)
+static int microp_i2c_probe(struct i2c_client *client
+	, const struct i2c_device_id *id)
 {
 	struct microp_i2c_platform_data *pdata;
 	struct microp_i2c_client_data *cdata;
 	uint8_t data[6];
 	int ret;
+
+	cdata = kzalloc(sizeof(struct microp_i2c_client_data), GFP_KERNEL);
+	if (!cdata) {
+		ret = -ENOMEM;
+		dev_err(&client->dev, "failed on allocat cdata\n");
+		goto err_cdata;
+	}
+
+	i2c_set_clientdata(client, cdata);
+
+	mutex_init(&cdata->microp_adc_mutex);
+	mutex_init(&cdata->microp_i2c_rw_mutex);
 
 	private_microp_client = client;
 	pdata = client->dev.platform_data;
@@ -886,27 +691,10 @@ static int microp_i2c_probe(struct i2c_client *client,
 		goto err_gpio_reset;
 	}
 
-	cdata = kzalloc(sizeof(struct microp_i2c_client_data), GFP_KERNEL);
-	if (!cdata) {
-		ret = -ENOMEM;
-		dev_err(&client->dev, "failed on allocat cdata\n");
-		goto err_cdata;
-	}
-
-	i2c_set_clientdata(client, cdata);
 	cdata->version = data[0] << 8 | data[1];
 	atomic_set(&cdata->microp_is_suspend, 0);
 
 	cdata->spi_devices_vote = pdata->spi_devices_init;
-
-	ret = microp_led_init();
-	if (ret < 0) {
-		ret = -ENODEV;
-		dev_err(&client->dev, "failed on initialize led driver\n");
-		goto err_led_init;
-	}
-
-	mutex_init(&cdata->microp_i2c_mutex);
 
 	cdata->intr_status = 0;
 	hrtimer_init(&cdata->gen_irq_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
@@ -943,7 +731,6 @@ static int microp_i2c_probe(struct i2c_client *client,
 #endif
 	ret = device_create_file(&client->dev, &dev_attr_reset);
 	ret = device_create_file(&client->dev, &dev_attr_version);
-	ret = device_create_file(&client->dev, &dev_attr_key_adc);
 	ret = device_create_file(&client->dev, &dev_attr_gpio);
 
 	register_microp_devices(pdata->microp_devices, pdata->num_devices);
@@ -956,14 +743,6 @@ static int microp_i2c_probe(struct i2c_client *client,
 		}
 	}
 
-	INIT_DELAYED_WORK(&cdata->hpin_enable_intr_work,
-			microp_hpin_work_func);
-	INIT_DELAYED_WORK(&cdata->hpin_debounce_work,
-			hpin_debounce_do_work);
-
-	if (oj_callback && oj_callback->oj_init)
-		oj_callback->oj_init();
-
 	return 0;
 
 err_fun_init:
@@ -972,19 +751,16 @@ err_fun_init:
 #endif
 	device_remove_file(&client->dev, &dev_attr_reset);
 	device_remove_file(&client->dev, &dev_attr_version);
-	device_remove_file(&client->dev, &dev_attr_key_adc);
 	device_remove_file(&client->dev, &dev_attr_gpio);
 	destroy_workqueue(cdata->microp_queue);
 err_intr:
 err_create_work_queue:
-	microp_led_exit();
-err_led_init:
 	kfree(cdata);
-err_cdata:
 err_gpio_reset:
 	gpio_free(pdata->gpio_reset);
 err_exit:
 	private_microp_client = NULL;
+err_cdata:
 	return ret;
 }
 

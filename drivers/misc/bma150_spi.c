@@ -27,8 +27,6 @@
 
 struct early_suspend bma_early_suspend;
 
-
-
 static struct bma150_platform_data *this_pdata;
 
 static struct mutex gsensor_RW_mutex;
