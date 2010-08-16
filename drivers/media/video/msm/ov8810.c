@@ -57,6 +57,7 @@
 
 #include <linux/delay.h>
 #include <linux/types.h>
+#include <linux/slab.h>
 #include <linux/i2c.h>
 #include <linux/uaccess.h>
 #include <linux/miscdevice.h>
@@ -228,6 +229,7 @@ int global_mode;
 /*TODO: should be use a header file to reference this function*/
 extern unsigned char *get_cam_awb_cal(void);
 
+static int sensor_probe_node = 0;
 
 static struct wake_lock ov8810_wake_lock;
 
@@ -2136,7 +2138,10 @@ static int ov8810_sensor_open_init(struct msm_camera_sensor_info *data)
 init_fail:
 	pr_err("%s: init_fail\n", __func__);
 	vreg_disable(vreg_af_actuator);
-	kfree(ov8810_ctrl);
+	if (ov8810_ctrl) {
+		kfree(ov8810_ctrl);
+		ov8810_ctrl = NULL;
+	}
 init_done:
 	up(&ov8810_sem);
 	pr_info("%s: init_done\n", __func__);
@@ -2365,8 +2370,17 @@ static ssize_t sensor_set_cam_mode(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(node, 0444, sensor_vendor_show, NULL);
+static ssize_t sensor_read_node(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	ssize_t length;
+	length = sprintf(buf, "%d\n", sensor_probe_node);
+	return length;
+}
+
+static DEVICE_ATTR(sensor, 0444, sensor_vendor_show, NULL);
 static DEVICE_ATTR(cam_mode, 0644, sensor_read_cam_mode, sensor_set_cam_mode);
+static DEVICE_ATTR(node, 0444, sensor_read_node, NULL);
 
 static struct kobject *android_ov8810;
 
@@ -2381,7 +2395,7 @@ static int ov8810_sysfs_init(void)
 		return ret ;
 	}
 	pr_info("Ov8810:sysfs_create_file\n");
-	ret = sysfs_create_file(android_ov8810, &dev_attr_node.attr);
+	ret = sysfs_create_file(android_ov8810, &dev_attr_sensor.attr);
 	if (ret) {
 		pr_info("ov8810_sysfs_init: sysfs_create_file failed\n");
 		ret = -EFAULT;
@@ -2391,6 +2405,13 @@ static int ov8810_sysfs_init(void)
 	ret = sysfs_create_file(android_ov8810, &dev_attr_cam_mode.attr);
 	if (ret) {
 		pr_info("ov8810_sysfs_init: dev_attr_cam_mode failed\n");
+		ret = -EFAULT;
+		goto error;
+	}
+
+	ret = sysfs_create_file(android_ov8810, &dev_attr_node.attr);
+	if (ret) {
+		pr_info("ov8810_sysfs_init: dev_attr_node failed\n");
 		ret = -EFAULT;
 		goto error;
 	}
@@ -2546,7 +2567,7 @@ int ov8810_sensor_config(void __user *argp)
 			break;
 
 		default:
-			printk(KERN_ERR "unhandled cfgtype: %d\n", cdata.cfgtype); 
+			rc = -EFAULT;
 			break;
 		}
 
@@ -2577,8 +2598,10 @@ static int ov8810_sensor_release(void)
 	pr_info("%s, %d\n", __func__, __LINE__);
 
 	msm_camio_probe_off(ov8810_pdev);
-	kfree(ov8810_ctrl);
-	ov8810_ctrl = NULL;
+	if (ov8810_ctrl) {
+		kfree(ov8810_ctrl);
+		ov8810_ctrl = NULL;
+	}
 
 	allow_suspend();
 	pr_info("ov8810_release completed\n");
@@ -2596,6 +2619,9 @@ static int ov8810_sensor_probe(struct msm_camera_sensor_info *info,
 		rc = -ENOTSUPP;
 		goto probe_fail;
 	}
+
+	pr_info("ov8810 s->node %d\n", s->node);
+	sensor_probe_node = s->node;
 	/*switch pclk and mclk between main cam and 2nd cam*/
 	/*only for supersonic*/
 	pr_info("Ov8810: doing clk switch (ov8810)\n");
@@ -2657,9 +2683,44 @@ probe_done:
 
 }
 
+static int ov8810_vreg_enable(struct platform_device *pdev)
+{
+	struct msm_camera_sensor_info *sdata = pdev->dev.platform_data;
+	int rc;
+	pr_info("%s camera vreg on\n", __func__);
+
+	if (sdata->camera_power_on == NULL) {
+		pr_err("sensor platform_data didnt register\n");
+		return -EIO;
+	}
+	rc = sdata->camera_power_on();
+	return rc;
+}
+
+
+static int ov8810_vreg_disable(struct platform_device *pdev)
+{
+	struct msm_camera_sensor_info *sdata = pdev->dev.platform_data;
+	int rc;
+	printk(KERN_INFO "%s camera vreg off\n", __func__);
+	if (sdata->camera_power_off == NULL) {
+		pr_err("sensor platform_data didnt register\n");
+		return -EIO;
+	}
+	rc = sdata->camera_power_off();
+	return rc;
+}
+
+
 static int __ov8810_probe(struct platform_device *pdev)
 {
+	int rc;
+	printk("__ov8810_probe\n");
 	ov8810_pdev = pdev;
+	rc = ov8810_vreg_enable(pdev);
+	if (rc < 0)
+		pr_err("__ov8810_probe fail sensor power on error\n");
+
 	return msm_camera_drv_start(pdev, ov8810_sensor_probe);
 }
 
