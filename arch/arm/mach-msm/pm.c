@@ -556,7 +556,7 @@ static struct platform_suspend_ops msm_pm_ops = {
 #if defined(CONFIG_ARCH_MSM7X00A)
 static uint32_t restart_reason = 0x776655AA;
 #else
-static uint32_t restart_reason = 0x77665502;
+static uint32_t restart_reason = 0;
 #endif
 
 static void msm_pm_power_off(void)

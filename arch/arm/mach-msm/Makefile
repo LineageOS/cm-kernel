@@ -57,7 +57,6 @@ obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-wifi.o htc_awb_cal.o
 obj-$(CONFIG_MACH_SUPERSONIC) += msm_vibrator.o
 obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-microp.o
 obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-tpa2018d1.o
-obj-$(CONFIG_MACH_SUPERSONIC) += board-supersonic-smb329.o
 obj-$(CONFIG_MACH_SUPERSONIC) += drv_callback.o
 
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery_trout.o

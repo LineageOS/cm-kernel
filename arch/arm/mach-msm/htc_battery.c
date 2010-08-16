@@ -27,7 +27,6 @@
 #include <mach/board.h>
 #include <asm/mach-types.h>
 #include <mach/board_htc.h>
-#include <mach/msm_fb.h> /* Jay, to register display notifier */
 #include <mach/htc_battery.h>
 #include <linux/rtc.h>
 #ifdef CONFIG_HTC_BATTCHG_SMEM
@@ -38,11 +37,14 @@
 #include <mach/htc_one_wire.h>
 #endif
 
-#ifdef CONFIG_BATTERY_DS2784
+#if defined(CONFIG_BATTERY_DS2784)
 #include <linux/ds2784_battery.h>
+#elif defined(CONFIG_BATTERY_DS2746)
+#include <linux/ds2746_battery.h>
 #endif
 
-#include "board-supersonic-smb329.h"
+#include <mach/smb329.h>
+#include <mach/notify.h>
 
 static struct wake_lock vbus_wake_lock;
 
@@ -91,6 +93,7 @@ tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec); \
 #define HTC_PROCEDURE_SET_BATT_DELTA	4
 #define HTC_PROCEDURE_CHARGER_SWITCH    6
 #define HTC_PROCEDURE_SET_FULL_LEVEL	7
+#define HTC_PROCEDURE_GET_USB_ACCESSORY_ADC_LEVEL	10
 
 const char *charger_tags[] = {"none", "USB", "AC"};
 
@@ -183,6 +186,12 @@ static struct power_supply htc_power_supplies[] = {
 };
 
 static int update_batt_info(void);
+extern void notify_usb_connected(int online);
+//static int g_usb_online;
+static struct t_usb_status_notifier usb_status_notifier = {
+	.name = "htc_battery",
+	.func = notify_usb_connected,
+};
 
 /* Move cable detection/notification to standard PMIC RPC. */
 static BLOCKING_NOTIFIER_HEAD(cable_status_notifier_list);
@@ -244,9 +253,8 @@ static int htc_power_policy(struct notifier_block *nfb,
 		unsigned long action, void *ignored)
 {
 	int rc;
-	pr_info("%s: enter.\n", __func__);
-#if 0
 	switch (action) {
+#if 0
 	case NOTIFY_POWER:
 		pr_info("%s: enter.\n", __func__);
 		rc = __htc_power_policy();
@@ -254,8 +262,8 @@ static int htc_power_policy(struct notifier_block *nfb,
 			return NOTIFY_STOP;
 		else
 			return NOTIFY_OK;
-	}
 #endif
+	}
 	return NOTIFY_DONE; /* we did not care other action here */
 }
 
@@ -484,7 +492,8 @@ static int htc_cable_status_update(int status)
 		msm_hsusb_set_vbus_state(!!htc_batt_info.rep.charging_source);
 
 	/* TODO: use power_supply_change to notify battery drivers. */
-	if (htc_batt_info.guage_driver == GUAGE_DS2784)
+	if (htc_batt_info.guage_driver == GUAGE_DS2784 ||
+		htc_batt_info.guage_driver == GUAGE_DS2746)
 		blocking_notifier_call_chain(&cable_status_notifier_list,
 			status, NULL);
 
@@ -515,7 +524,8 @@ static int htc_cable_status_update(int status)
 	}
 
 	msm_hsusb_set_vbus_state(status == CHARGER_USB);
-	if (htc_batt_info.guage_driver == GUAGE_DS2784)
+	if (htc_batt_info.guage_driver == GUAGE_DS2784 ||
+		htc_batt_info.guage_driver == GUAGE_DS2746)
 		blocking_notifier_call_chain(&cable_status_notifier_list,
 			htc_batt_info.rep.charging_source, NULL);
 
@@ -554,19 +564,53 @@ static int htc_cable_status_update(int status)
 	return rc;
 }
 
+#ifdef CONFIG_USB_ACCESSORY_DETECT_BY_ADC
+int htc_get_usb_accessory_adc_level(uint32_t *buffer)
+{
+	struct rpc_request_hdr req;
+
+	struct htc_get_usb_adc_value_rep {
+		struct rpc_reply_hdr hdr;
+		uint32_t adc_value;
+	} rep;
+
+	int rc;
+	printk(KERN_INFO "%s\n", __func__);
+
+	if (buffer == NULL) {
+		printk(KERN_INFO "%s: buffer null\n", __func__);
+		return -EINVAL;
+	}
+
+	rc = msm_rpc_call_reply(endpoint, HTC_PROCEDURE_GET_USB_ACCESSORY_ADC_LEVEL,
+				&req, sizeof(req),
+				&rep, sizeof(rep),
+				5 * HZ);
+	if (rc < 0) {
+		printk(KERN_INFO "%s: msm_rpc_call_reply fail\n", __func__);
+		return rc;
+	}
+	*buffer 		= be32_to_cpu(rep.adc_value);
+
+	printk(KERN_INFO "%s: adc = %d\n", __func__, *buffer);
+	return 0;
+}
+EXPORT_SYMBOL(htc_get_usb_accessory_adc_level);
+#endif
+
 /* A9 reports USB charging when helf AC cable in and China AC charger. */
 /* notify userspace USB charging first,
 and then usb driver will notify AC while D+/D- Line short. */
 void notify_usb_connected(int online)
 {
-	printk(KERN_DEBUG "%s: online=%d\n", __func__, online);
 #if 1
+	pr_info("batt:online=%d",online);
 	/* TODO: replace charging_source to usb_status */
 	htc_batt_info.rep.charging_source = online;
 	htc_set_smem_cable_type(htc_batt_info.rep.charging_source);
 
 	/* TODO: use power_supply_change to notify battery drivers. */
-	if (htc_batt_info.guage_driver == GUAGE_DS2784)
+	if (htc_batt_info.guage_driver == GUAGE_DS2784 || htc_batt_info.guage_driver == GUAGE_DS2746)
 		blocking_notifier_call_chain(&cable_status_notifier_list,
 			htc_batt_info.rep.charging_source, NULL);
 
@@ -873,10 +917,10 @@ static ssize_t htc_battery_show_batt_attr(struct device *dev,
 #endif
 		break;
 	case GUAGE_DS2784:
+	case GUAGE_DS2746:
 		return htc_batt_info.func_show_batt_attr(attr, buf);
 		break;
 	}
-
 	return 0;
 }
 
@@ -959,11 +1003,6 @@ static int htc_battery_get_charging_status(void)
 	}
 	mutex_unlock(&htc_batt_info.lock);
 	return ret;
-}
-
-int is_ac_power_supplied(void)
-{
-	return (htc_batt_info.rep.charging_source == CHARGER_AC);
 }
 
 static int htc_battery_get_property(struct power_supply *psy,
@@ -1173,18 +1212,19 @@ static ssize_t htc_battery_set_full_level(struct device *dev,
 		mutex_unlock(&htc_batt_info.rpc_lock);
 		break;
 	case GUAGE_DS2784:
+	case GUAGE_DS2746:
 		if (htc_full_level_flag == 0) {
-			mutex_lock(&htc_batt_info.lock);
-			htc_full_level_flag = 1;
-			htc_batt_info.rep.full_level = percent;
-			param = percent;
-			blocking_notifier_call_chain(&cable_status_notifier_list,
-				0xff, (void *) &param);
-			mutex_unlock(&htc_batt_info.lock);
-		}
-		rc = 0;
+	mutex_lock(&htc_batt_info.lock);
+	htc_full_level_flag = 1;
+	htc_batt_info.rep.full_level = percent;
+	param = percent;
+	blocking_notifier_call_chain(&cable_status_notifier_list,
+		0xff, (void *) &param);
+	mutex_unlock(&htc_batt_info.lock);
+			}
+	rc = 0;
 		break;
-	}
+		}
 	if (rc < 0)
 		return rc;
 	return rc;
@@ -1244,14 +1284,22 @@ static int update_batt_info(void)
 		}
 #endif
 		break;
-#ifdef CONFIG_BATTERY_DS2784
+#if defined(CONFIG_BATTERY_DS2784)
 	case GUAGE_DS2784:
 		if (ds2784_get_battery_info(&htc_batt_info.rep)) {
 			BATT_ERR("%s: ds2784 read failed!!!", __func__);
 			ret = -1;
 		}
 		break;
+#elif defined(CONFIG_BATTERY_DS2746)
+	case GUAGE_DS2746:
+		if (ds2746_get_battery_info(&htc_batt_info.rep)) {
+			BATT_ERR("%s: ds2746 read failed!!!", __func__);
+			ret = -1;
+		}
+		break;
 #endif
+
 	default:
 		return -EINVAL;
 	}
@@ -1357,7 +1405,7 @@ static int htc_battery_core_probe(struct platform_device *pdev)
 	if (IS_ERR(endpoint)) {
 		BATT_ERR("%s: init rpc failed! rc = %ld",
 		       __func__, PTR_ERR(endpoint));
-		return rc;
+		return -EINVAL;
 	}
 
 	/* init power supplier framework */
@@ -1430,11 +1478,11 @@ static int handle_battery_call(struct msm_rpc_server *server,
 		if (htc_batt_debug_mask & HTC_BATT_DEBUG_M2A_RPC)
 			BATT_LOG("M2A_RPC: set_charging: %d", args->enable);
 		if (htc_batt_info.charger == SWITCH_CHARGER)
-		blocking_notifier_call_chain(&cable_status_notifier_list,
-		args->enable, NULL);
+			blocking_notifier_call_chain(&cable_status_notifier_list,
+				args->enable, NULL);
 		else {
 			htc_battery_set_charging(args->enable);
-			}
+		}
 		return 0;
 	}
 	case RPC_BATT_MTOA_CABLE_STATUS_UPDATE_PROC: {
@@ -1476,7 +1524,7 @@ static struct msm_rpc_server battery_server = {
 	.rpc_call = handle_battery_call,
 };
 
-#ifdef CONFIG_BATTERY_DS2784
+#if defined(CONFIG_BATTERY_DS2784) || defined(CONFIG_BATTERY_DS2746)
 static int ds2784_notifier_func(struct notifier_block *nfb,
 		unsigned long action, void *param)
 {
@@ -1510,6 +1558,7 @@ static int ds2784_notifier_func(struct notifier_block *nfb,
 static struct notifier_block ds2784_notifier = {
 	.notifier_call = ds2784_notifier_func,
 };
+
 #endif
 
 static int htc_battery_probe(struct platform_device *pdev)
@@ -1530,15 +1579,25 @@ static int htc_battery_probe(struct platform_device *pdev)
 		htc_batt_info.gpio_iset = pdata->gpio_iset;
 	}
 
-	if (pdata->guage_driver == GUAGE_MODEM || pdata->m2a_cable_detect)
+	if (pdata->guage_driver == GUAGE_MODEM ||
+		pdata->m2a_cable_detect)
 		msm_rpc_create_server(&battery_server);
-
-#ifdef CONFIG_BATTERY_DS2784
+#if defined(CONFIG_BATTERY_DS2784)
 	if (pdata->guage_driver == GUAGE_DS2784)
 		ds2784_register_notifier(&ds2784_notifier);
+#elif defined(CONFIG_BATTERY_DS2746)
+	if (pdata->guage_driver == GUAGE_DS2746)
+		ds2746_register_notifier(&ds2784_notifier);
 #endif
 
 	return 0;
+}
+
+int get_cable_status(void)
+{
+//	if(htc_batt_info.rep.charging_source == CHARGER_AC || htc_batt_info.rep.charging_source == CHARGER_USB)
+//		htc_cable_status_update(htc_batt_info.rep.charging_source);
+	return htc_batt_info.rep.charging_source;
 }
 
 static struct platform_driver htc_battery_driver = {
@@ -1574,9 +1633,12 @@ static int __init htc_battery_init(void)
 	wake_lock_init(&vbus_wake_lock, WAKE_LOCK_SUSPEND, "vbus_present");
 	mutex_init(&htc_batt_info.lock);
 	mutex_init(&htc_batt_info.rpc_lock);
+//XXX	usb_register_notifier(&usb_status_notifier);
 	platform_driver_register(&htc_battery_driver);
 	platform_driver_register(&htc_battery_core_driver);
 	batt_register_client(&batt_notify);
+	/* Jay, The msm_fb need to consult htc_battery for power policy */
+//XXX	display_notifier(htc_power_policy, NOTIFY_POWER);
 	return 0;
 }
 
