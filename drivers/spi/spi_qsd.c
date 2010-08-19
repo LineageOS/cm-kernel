@@ -21,13 +21,112 @@
 #include <linux/workqueue.h>
 #include <linux/io.h>
 #include <asm/gpio.h>
+#include <mach/msm_iomap.h>
 
 #define SPI_CONFIG              (0x00000000)
 #define SPI_IO_CONTROL          (0x00000004)
 #define SPI_OPERATIONAL         (0x00000030)
 #define SPI_ERROR_FLAGS_EN      (0x00000038)
-#define SPI_ERROR_FLAGS         (0x00000038)
+#define SPI_ERROR_FLAGS         (0x00000034)
 #define SPI_OUTPUT_FIFO         (0x00000100)
+
+#ifdef CONFIG_ARCH_MSM7X30
+
+struct spi_device        *spidev;
+
+extern int samsung_oled_panel_init(struct msm_lcdc_panel_ops *ops);
+int qspi_send_16bit(unsigned char id, unsigned data)
+{
+	unsigned char buffer[4];
+	int tmp;
+	tmp = (id<<13 | data)<<16;
+
+	buffer[0] = tmp >> 24;
+	buffer[1] = (tmp & 0x00FF0000) >> 16;
+	buffer[2] = (tmp & 0x0000FF00) >> 8;
+	buffer[3] = tmp & 0x000000FF;
+	spi_write(spidev,buffer,4);
+	return 0;
+}
+int qspi_send_9bit(struct spi_msg *msg)
+{
+	int tmp = 0;
+	spidev->bits_per_word = 9;
+	tmp = (0x0 <<8 | msg->cmd)<<23;
+	msg->buffer[0] = tmp >> 24;
+	msg->buffer[1] = (tmp & 0x00FF0000) >> 16;
+
+	if(msg->len != 0) {
+		int i = 0, j;
+		for(j = 2; i < msg->len; i++, j+=2){
+			tmp &= 0x00000000;
+			tmp = (0x1<<8 | *(msg->data+i))<<23;
+			msg->buffer[j] = tmp >> 24;
+			msg->buffer[j+1] = (tmp & 0x00FF0000) >> 16;
+		}
+	}
+
+	spi_read_write_lock(spidev, msg, NULL, 2, 1);
+
+	return 0;
+}
+
+
+int qspi_send(unsigned char id, unsigned data)
+{
+	unsigned char buffer[2];
+	int tmp;
+	tmp = (0x7000 | id<<9 | data)<<16;
+
+	spidev->bits_per_word = 16;
+
+	buffer[0] = tmp >> 24;
+	buffer[1] = (tmp & 0x00FF0000) >> 16;
+
+	spi_write(spidev,buffer,2);
+	return 0;
+}
+
+
+static int msm_spi_probe(struct spi_device *spi)
+{
+	printk(" %s \n", __func__);
+	spidev = spi;
+	return 0 ;
+}
+
+static int msm_spi_remove(struct platform_device *pdev)
+{
+	spidev = NULL;
+	return 0;
+}
+
+
+static struct spi_driver spi_qsd = {
+	.driver = {
+		.name  = "spi_qsd",
+		.owner = THIS_MODULE,
+	},
+	.probe         = msm_spi_probe,
+	.remove        = __devexit_p(msm_spi_remove),
+};
+
+
+static int __init spi_qsd_init(void)
+{
+	int rc;
+	rc = spi_register_driver(&spi_qsd);
+	return rc;
+}
+module_init(spi_qsd_init);
+
+static void __exit spi_qsd_exit(void)
+{
+	spi_unregister_driver(&spi_qsd);
+}
+module_exit(spi_qsd_exit);
+
+#else
 
 void __iomem *spi_base;
 struct clk *spi_clk ;
@@ -166,10 +265,10 @@ static struct platform_driver msm_spi_driver = {
 		.name	= "spi_qsd",
 		.owner	= THIS_MODULE,
 	},
-#if 0
+
 	.suspend        = msm_spi_suspend,
 	.resume         = msm_spi_resume,
-#endif
+
 	.remove		= __exit_p(msm_spi_remove),
 };
 
@@ -179,3 +278,4 @@ static int __init msm_spi_init(void)
 }
 
 fs_initcall(msm_spi_init);
+#endif
