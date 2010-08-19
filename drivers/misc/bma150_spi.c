@@ -371,9 +371,9 @@ static void bma150_early_suspend(struct early_suspend *handler)
 	int ret = 0;
 	ret = __spi_bma150_set_mode(BMA_MODE_SLEEP);
 
-	/*printk(KERN_DEBUG
+	printk(KERN_DEBUG
 		"%s: spi_bma150_set_mode returned = %d!\n",
-			__func__, ret);*/
+			__func__, ret);
 }
 
 static void bma150_early_resume(struct early_suspend *handler)
