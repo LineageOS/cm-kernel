@@ -18,7 +18,6 @@
 #include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/syscalls.h>
-#include <linux/slab.h>
 #include <mach/atmega_microp.h>
 #include <asm/mach-types.h>
 #include <linux/earlysuspend.h>
@@ -29,7 +28,7 @@
 #include <linux/irq.h>
 #include <asm/uaccess.h>
 #include "proc_comm.h"
-
+#include <linux/slab.h>
 
 #define I2C_READ_RETRY_TIMES			10
 #define I2C_WRITE_RETRY_TIMES			10

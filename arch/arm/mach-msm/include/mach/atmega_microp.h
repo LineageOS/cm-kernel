@@ -258,6 +258,7 @@ int microp_write_interrupt(struct i2c_client *client,
 void microp_get_als_kvalue(int i);
 int microp_spi_vote_enable(int spi_device, uint8_t enable);
 void microp_register_ops(struct microp_ops *ops);
+
 int microp_read_adc(uint8_t *data);
 void microp_mobeam_enable(int enable);
 
