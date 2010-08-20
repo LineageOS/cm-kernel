@@ -23,10 +23,9 @@
 #include <linux/init.h>
 #include <linux/cache.h>
 #include <linux/mutex.h>
-#include <linux/slab.h>
 #include <linux/mod_devicetable.h>
 #include <linux/spi/spi.h>
-
+#include <linux/slab.h>
 
 /* SPI bustype and spi_master class are registered after board init code
  * provides the SPI device tables, ensuring that both are present by the
@@ -41,7 +40,7 @@ static void spidev_release(struct device *dev)
 		spi->master->cleanup(spi);
 
 	spi_master_put(spi->master);
-	kfree(spi);
+	kfree(dev);
 }
 
 static ssize_t
@@ -257,7 +256,6 @@ int spi_add_device(struct spi_device *spi)
 {
 	static DEFINE_MUTEX(spi_add_lock);
 	struct device *dev = spi->master->dev.parent;
-	struct device *d;
 	int status;
 
 	/* Chipselects are numbered 0..max; validate. */
@@ -279,11 +277,10 @@ int spi_add_device(struct spi_device *spi)
 	 */
 	mutex_lock(&spi_add_lock);
 
-	d = bus_find_device_by_name(&spi_bus_type, NULL, dev_name(&spi->dev));
-	if (d != NULL) {
+	if (bus_find_device_by_name(&spi_bus_type, NULL, dev_name(&spi->dev))
+			!= NULL) {
 		dev_err(dev, "chipselect %d already in use\n",
 				spi->chip_select);
-		put_device(d);
 		status = -EBUSY;
 		goto done;
 	}

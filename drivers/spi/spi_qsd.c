@@ -265,10 +265,10 @@ static struct platform_driver msm_spi_driver = {
 		.name	= "spi_qsd",
 		.owner	= THIS_MODULE,
 	},
-
+#if 0
 	.suspend        = msm_spi_suspend,
 	.resume         = msm_spi_resume,
-
+#endif
 	.remove		= __exit_p(msm_spi_remove),
 };
 
