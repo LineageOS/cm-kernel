@@ -61,10 +61,12 @@
 #include <mach/htc_headset_gpio.h>
 #include <mach/htc_headset_microp.h>
 
+
 #ifdef CONFIG_MICROP_COMMON
 #include <mach/atmega_microp.h>
 #endif
 
+#include <mach/msm_hdmi.h>
 #include <mach/msm_hsusb.h>
 
 #include "board-supersonic-tpa2018d1.h"
@@ -867,6 +869,192 @@ static struct tpa2018d1_platform_data tpa2018_data = {
 	.gpio_tpa2018_spk_en = SUPERSONIC_AUD_SPK_EN,
 };
 
+/*
+ * HDMI platform data
+ */
+
+#if 1
+#define HDMI_DBG(s...) printk("[hdmi]" s)
+#else
+#define HDMI_DBG(s...) do {} while (0)
+#endif
+
+static int hdmi_power(int on)
+{
+	HDMI_DBG("%s(%d)\n", __func__, on);
+
+	switch(on) {
+	/* Power on/off sequence for normal or D2 sleep mode */
+	case 0:
+		gpio_set_value(HDMI_RST, 0);
+		msleep(2);
+		gpio_set_value(V_HDMI_3V3_EN, 0);
+		gpio_set_value(V_VGA_5V_SIL9022A_EN, 0);
+		msleep(2);
+		gpio_set_value(V_HDMI_1V2_EN, 0);
+		break;
+	case 1:
+		gpio_set_value(V_HDMI_1V2_EN, 1);
+		msleep(2);
+		gpio_set_value(V_VGA_5V_SIL9022A_EN, 1);
+		gpio_set_value(V_HDMI_3V3_EN, 1);
+		msleep(2);
+		gpio_set_value(HDMI_RST, 1);
+		msleep(2);
+		break;
+
+	/* Power on/off sequence for D3 sleep mode */
+	case 2:
+		gpio_set_value(V_HDMI_3V3_EN, 0);
+		break;
+	case 3:
+		gpio_set_value(HDMI_RST, 0);
+		msleep(2);
+		gpio_set_value(V_HDMI_3V3_EN, 1);
+		gpio_set_value(V_VGA_5V_SIL9022A_EN, 1);
+		msleep(50);
+		gpio_set_value(HDMI_RST, 1);
+		msleep(10);
+		break;
+	case 4:
+		gpio_set_value(V_VGA_5V_SIL9022A_EN, 0);
+		break;
+	case 5:
+		gpio_set_value(V_VGA_5V_SIL9022A_EN, 1);
+		break;
+
+	default:
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static uint32_t hdmi_gpio_on_table[] = {
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R0, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R1, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R2, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R3, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R4, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G0, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G1, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G2, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G3, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G4, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G5, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B0, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B1, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B2, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B3, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B4, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_PCLK, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_VSYNC, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_HSYNC, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_DE, 1, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+};
+
+static uint32_t hdmi_gpio_off_table[] = {
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R0, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R1, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R2, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R3, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_R4, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G0, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G1, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G2, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G3, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G4, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_G5, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B0, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B1, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B2, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B3, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_B4, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_PCLK, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_VSYNC, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_HSYNC, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+	PCOM_GPIO_CFG(SUPERSONIC_LCD_DE, 0, GPIO_OUTPUT, GPIO_NO_PULL,
+			GPIO_2MA),
+};
+
+
+static void suc_hdmi_gpio_on(void)
+{
+	HDMI_DBG("%s\n", __func__);
+
+	config_gpio_table(hdmi_gpio_on_table, ARRAY_SIZE(hdmi_gpio_on_table));
+}
+
+static void suc_hdmi_gpio_off(void)
+{
+	int i = 0;
+
+	HDMI_DBG("%s\n", __func__);
+	config_gpio_table(hdmi_gpio_off_table, ARRAY_SIZE(hdmi_gpio_off_table));
+
+	for (i = SUPERSONIC_LCD_R0; i <= SUPERSONIC_LCD_R4; i++)
+		gpio_set_value(i, 0);
+	for (i = SUPERSONIC_LCD_G0; i <= SUPERSONIC_LCD_G5; i++)
+		gpio_set_value(i, 0);
+	for (i = SUPERSONIC_LCD_B0; i <= SUPERSONIC_LCD_DE; i++)
+		gpio_set_value(i, 0);
+}
+
+static struct hdmi_platform_data hdmi_device_data = {
+	.hdmi_res = {
+		.start = MSM_HDMI_FB_BASE,
+		.end = MSM_HDMI_FB_BASE + MSM_HDMI_FB_SIZE - 1,
+		.flags = IORESOURCE_MEM,
+	},
+	.power = hdmi_power,
+	.hdmi_gpio_on = suc_hdmi_gpio_on,
+	.hdmi_gpio_off = suc_hdmi_gpio_off,
+};
+
 static struct tpa6130_platform_data headset_amp_platform_data = {
 	.enable_rpc_server = 0,
 };
@@ -913,6 +1101,11 @@ static struct i2c_board_info i2c_devices[] = {
 	{
 		I2C_BOARD_INFO("tpa2018d1", 0x58),
 		.platform_data = &tpa2018_data,
+	},
+	{
+		I2C_BOARD_INFO("SiL902x-hdmi", 0x76 >> 1),
+		.platform_data = &hdmi_device_data,
+		.irq = MSM_uP_TO_INT(1),
 	},
 };
 

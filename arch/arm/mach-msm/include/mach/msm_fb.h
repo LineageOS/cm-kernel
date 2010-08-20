@@ -78,6 +78,9 @@ struct msm_panel_data {
 	void (*request_vsync)(struct msm_panel_data *, struct msmfb_callback *);
 	void (*clear_vsync)(struct msm_panel_data *);
 	void (*dump_vsync)(void);
+	/* change timing on the fly */
+	int (*adjust_timing)(struct msm_panel_data *, struct msm_lcdc_timing *,
+			u32 xres, u32 yres);
 	/* from the enum above */
 	unsigned interface_type;
 	/* data to be passed to the fb driver */
