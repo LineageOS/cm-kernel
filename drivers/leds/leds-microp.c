@@ -768,5 +768,11 @@ void microp_led_exit(void)
 {
 	platform_driver_unregister(&microp_led_driver);
 }
+
+module_init(microp_led_init);
+module_exit(microp_led_exit);
+
+MODULE_DESCRIPTION("Atmega MicroP led driver");
+MODULE_LICENSE("GPL");
 #endif /* end of #ifdef CONFIG_MICROP_COMMON*/
 
