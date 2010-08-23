@@ -131,5 +131,5 @@ struct t_usb_status_notifier{
 #else
 static inline void msm_hsusb_set_vbus_state(int online) {}
 #endif
-
+int board_mfg_mode(void);
 #endif

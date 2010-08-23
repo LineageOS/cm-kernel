@@ -66,6 +66,7 @@ static const char *const ep_name[] = {
 	"ep12in", "ep13in", "ep14in", "ep15in"
 };
 
+static struct usb_info *the_usb_info;
 /* current state of VBUS */
 static int vbus;
 
@@ -123,6 +124,13 @@ static void usb_do_work(struct work_struct *w);
 #define USB_FLAG_VBUS_ONLINE    0x0002
 #define USB_FLAG_VBUS_OFFLINE   0x0004
 #define USB_FLAG_RESET          0x0008
+
+enum usb_connect_type {
+	CONNECT_TYPE_NONE = 0,
+	CONNECT_TYPE_USB,
+	CONNECT_TYPE_AC,
+	CONNECT_TYPE_UNKNOWN,
+};
 
 struct usb_info {
 	/* lock for register/queue/device state changes */
@@ -184,6 +192,7 @@ struct usb_info {
 	u16 test_mode;
 
 	u8 remote_wakeup;
+	enum usb_connect_type connect_type;
 };
 
 static const struct usb_ep_ops msm72k_ep_ops;
@@ -957,6 +966,14 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 	}
 	return IRQ_HANDLED;
 }
+
+int usb_get_connect_type(void)
+{
+	if (!the_usb_info)
+		return 0;
+	return the_usb_info->connect_type;
+}
+EXPORT_SYMBOL(usb_get_connect_type);
 
 static void usb_prepare(struct usb_info *ui)
 {
