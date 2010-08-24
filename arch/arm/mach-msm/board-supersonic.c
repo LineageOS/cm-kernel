@@ -1392,6 +1392,7 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 	.bt_wakeup_pin = SUPERSONIC_GPIO_BT_CHIP_WAKE,
 	.host_wakeup_pin = SUPERSONIC_GPIO_BT_HOST_WAKE,
 };
+
 #endif
 
 

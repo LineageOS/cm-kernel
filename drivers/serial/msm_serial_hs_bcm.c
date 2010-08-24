@@ -67,7 +67,7 @@
 /* for bcm */
 #include "../../arch/arm/mach-msm/gpio_chip.h"
 #include <linux/uaccess.h>
-
+#include "../../arch/arm/mach-msm/board-supersonic.h"
 #include "msm_serial_hs_hwreg.h"
 
 /* for bcm */
@@ -1108,6 +1108,7 @@ static int msm_hs_check_clock_off_locked(struct uart_port *uport)
 	if (msm_uport->host_want_sleep) {
 		if ((msm_uport->bt_wakeup_level == 0)
 			|| (msm_uport->bt_wakeup_assert_inadvance == 1)) {
+                        gpio_request(SUPERSONIC_GPIO_BT_CHIP_WAKE,"GPIO_BT_CHIP_WAKE");
 			gpio_direction_output(msm_uport->bt_wakeup_pin, 1);
 			msm_uport->bt_wakeup_level = 1;
 			msm_uport->bt_wakeup_assert_inadvance = 0;
@@ -1401,6 +1402,7 @@ msm_uartdm_ioctl(struct uart_port *uport, unsigned int cmd, unsigned long arg)
 		wake_lock(&tx->brcm_tx_wake_lock);
 
 		if (msm_uport->bt_wakeup_pin_supported) {
+                        gpio_request(SUPERSONIC_GPIO_BT_CHIP_WAKE,"GPIO_BT_CHIP_WAKE");
 			gpio_direction_output( msm_uport->bt_wakeup_pin, 0);
 			msm_uport->bt_wakeup_level = 0;
 			msm_uport->host_want_sleep = 0;
@@ -1492,6 +1494,7 @@ static irqreturn_t msm_hs_rx_wakeup_isr(int irq, void *dev)
 		#if 1	/* host asserts bt_wake */
 		if ((msm_uport->bt_wakeup_level == 1)
 			&& (msm_uport->bt_wakeup_assert_inadvance == 0)) {
+                        gpio_request(SUPERSONIC_GPIO_BT_CHIP_WAKE,"GPIO_BT_CHIP_WAKE");
 			gpio_direction_output( msm_uport->bt_wakeup_pin, 0);
 			msm_uport->bt_wakeup_assert_inadvance = 1;
 			#ifdef BT_SERIAL_DBG
