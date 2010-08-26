@@ -454,7 +454,7 @@ static void suc_set_brightness(struct led_classdev *led_cdev,
 			reg = pwm_seq[i].reg;
 			val = pwm_seq[i].val;
 			if (reg == REG_WAIT)
-				hr_msleep(val);
+				msleep(val);
 			else
 				client->remote_write(client, cpu_to_le32(val), reg);
 		}
@@ -545,7 +545,7 @@ supersonic_mddi_init(struct msm_mddi_bridge_platform_data *bridge_data,
 			reg = s1d13775_init_seq[i].reg;
 			val = s1d13775_init_seq[i].val;
 			if (reg == REG_WAIT)
-				hr_msleep(val);
+				msleep(val);
 			else
 				client_data->remote_write(client_data, cpu_to_le32(val), reg);
 		}
@@ -574,7 +574,7 @@ supersonic_mddi_init(struct msm_mddi_bridge_platform_data *bridge_data,
 			if (ret < 0)
 				printk("%s: spi_write fail!\n", __func__);
 			else if (sharp_spi[i].delay)
-				hr_msleep(sharp_spi[i].delay);
+				msleep(sharp_spi[i].delay);
 		}
 	}
 	else {
@@ -614,7 +614,7 @@ supersonic_mddi_uninit(struct msm_mddi_bridge_platform_data *bridge_data,
 			if (ret < 0)
 				printk("%s: spi_write fail!\n", __func__);
 			else if (sharp_spi[i].delay)
-				hr_msleep(sharp_spi[i].delay);
+				msleep(sharp_spi[i].delay);
 		}
 	}
 	else
@@ -810,19 +810,19 @@ mddi_novatec_power(struct msm_mddi_client_data *client_data, int on)
 		id = PM_VREG_PDOWN_AUX_ID;
 		msm_proc_comm(PCOM_VREG_PULLDOWN, &on_off, &id);
 		vreg_enable(vreg_lcd_1v8);
-		hr_msleep(15);
+		msleep(15);
 
 		gpio_set_value(SUPERSONIC_LCD_RST, 1);
-		hr_msleep(1);
+		msleep(1);
 		gpio_set_value(SUPERSONIC_LCD_RST, 0);
-		hr_msleep(5);
+		msleep(5);
 		gpio_set_value(SUPERSONIC_LCD_RST, 1);
-		hr_msleep(50);
+		msleep(50);
 		spi_gpio_switch(1);
 	} else {
 		on_off = 0;
 		gpio_set_value(SUPERSONIC_LCD_RST, 0);
-		hr_msleep(120);
+		msleep(120);
 
 		/* 1V8 */
 		id = PM_VREG_PDOWN_AUX_ID;
@@ -851,37 +851,37 @@ mddi_epson_power(struct msm_mddi_client_data *client_data, int on)
 		id = PM_VREG_PDOWN_SYNT_ID;
 		msm_proc_comm(PCOM_VREG_PULLDOWN, &on_off, &id);
 		vreg_enable(vreg_lcd_2v8);
-		hr_msleep(5);
+		msleep(5);
 		/* 1V8 */
 		gpio_set_value(16, 1);
 		id = PM_VREG_PDOWN_AUX_ID;
 		msm_proc_comm(PCOM_VREG_PULLDOWN, &on_off, &id);
 		vreg_enable(vreg_lcd_1v8);
-		hr_msleep(10);
+		msleep(10);
 
 		gpio_set_value(151, 1);
-		hr_msleep(2);
+		msleep(2);
 
 		gpio_set_value(SUPERSONIC_LCD_RST, 1);
-		hr_msleep(1);
+		msleep(1);
 		gpio_set_value(SUPERSONIC_LCD_RST, 0);
-		hr_msleep(5);
+		msleep(5);
 		gpio_set_value(SUPERSONIC_LCD_RST, 1);
-		hr_msleep(50);
+		msleep(50);
 		spi_gpio_switch(1);
 	} else {
 		on_off = 0;
 		gpio_set_value(SUPERSONIC_LCD_RST, 0);
-		hr_msleep(2);
+		msleep(2);
 		gpio_set_value(151, 0);
-		hr_msleep(120);
+		msleep(120);
 
 		/* 1V8 */
 		gpio_set_value(16, 0);
 		id = PM_VREG_PDOWN_AUX_ID;
 		msm_proc_comm(PCOM_VREG_PULLDOWN, &on_off, &id);
 		vreg_disable(vreg_lcd_1v8);
-		hr_msleep(5);
+		msleep(5);
 		/* 2V8 */
 		gpio_set_value(149, 0);
 		id = PM_VREG_PDOWN_SYNT_ID;
