@@ -35,6 +35,13 @@
 #include "devices.h"
 #include "proc_comm.h"
 
+/* 
+** Innitial T2 Settings
+** Novatek Panels are picky, most start 50fps @ 372, the minority starts @ 378
+** So defaulting at 380, should support all. keyword: *should*
+*/
+int savedT2 = 380; // 380 default, should support around 53+fps for all Novatek Panels
+
 #if 1
 #define B(s...) printk(s)
 #else
@@ -194,6 +201,9 @@ struct nov_regs {
 	{0x6A18, 0xff},
 	{0x6A17, 0x01},
 	{0xF402, 0x14},
+
+	{0xb101, 0x01}, // T2 init - Put back in, just in case if T2 is defaulted,
+	{0xb102, 0x7c}, // it gets defaulted to 380, and not 340. For Novatek Panels.
 
 	{0x3500, 0x00},
 	{0x1100, 0x0},
@@ -649,6 +659,25 @@ static int
 supersonic_panel_blank(struct msm_mddi_bridge_platform_data *bridge_data,
 			struct msm_mddi_client_data *client_data)
 {
+	/* For Novatek Panels Only */
+	if (panel_type == 1)
+	{
+		/*
+		** Get the T2 value into readT2
+		*/
+		unsigned readT2;
+		readT2 = 0;
+		readT2 |= client_data->remote_read(client_data, 0xb101) << 8;
+		readT2 |= client_data->remote_read(client_data, 0xb102);
+		/* readT2 value safety check */
+		if (readT2 < 245 || readT2 > 999)
+		{
+			readT2 = 380;
+		}
+		savedT2 = readT2;
+	}
+	/* Done */
+
 	B(KERN_DEBUG "%s\n", __func__);
 	suc_backlight_switch(LED_OFF);
 	backlight_control(0);
@@ -675,6 +704,23 @@ supersonic_panel_unblank(struct msm_mddi_bridge_platform_data *bridge_data,
 	}
 
 	backlight_control(1);
+
+	/* For Novatek Panels Only */
+	if (panel_type == 1)
+	{
+		/*
+		** Check saved value just to be safe
+		*/
+		if (savedT2 < 245 || savedT2 > 999)
+		{
+			savedT2 = 380;
+		}
+		/* Write savedT2 to T2 */
+		client_data->remote_write(client_data, (0xff00 & savedT2) >> 8, 0xb101);
+		client_data->remote_write(client_data, (0x00ff & savedT2), 0xb102);
+	}
+	/* Done */
+
 	return 0;
 }
 
