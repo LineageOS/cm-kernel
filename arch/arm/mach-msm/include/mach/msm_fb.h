@@ -64,6 +64,22 @@ enum {
 #define MSMFB_CAP_PARTIAL_UPDATES	(1 << 0)
 #define MSMFB_CAP_CABC			(1 << 1)
 
+struct msm_lcdc_timing {
+	unsigned int clk_rate;		/* dclk freq */
+	unsigned int hsync_pulse_width;	/* in dclks */
+	unsigned int hsync_back_porch;	/* in dclks */
+	unsigned int hsync_front_porch;	/* in dclks */
+	unsigned int hsync_skew;	/* in dclks */
+	unsigned int vsync_pulse_width;	/* in lines */
+	unsigned int vsync_back_porch;	/* in lines */
+	unsigned int vsync_front_porch;	/* in lines */
+
+	/* control signal polarity */
+	unsigned int vsync_act_low:1;
+	unsigned int hsync_act_low:1;
+	unsigned int den_act_low:1;
+};
+
 struct msm_panel_data {
 	/* turns off the fb memory */
 	int (*suspend)(struct msm_panel_data *);
@@ -88,6 +104,17 @@ struct msm_panel_data {
 
 	/* capabilities supported by the panel */
 	uint32_t caps;
+	/*
+	 * For samsung driver IC, we always need to indicate where
+	 * to draw. So we pass update_into to mddi client.
+	 *
+	 */
+	struct {
+		int left;
+		int top;
+		int eright; /* exclusive */
+		int ebottom; /* exclusive */
+	} update_info;
 };
 
 enum {
@@ -136,6 +163,7 @@ struct msm_mddi_platform_data {
 	struct resource *fb_resource; /*optional*/
 	/* number of clients in the list that follows */
 	int num_clients;
+	unsigned type;
 	/* array of client information of clients */
 	struct {
 		unsigned product_id; /* mfr id in top 16 bits, product id
@@ -156,22 +184,6 @@ struct msm_mddi_platform_data {
 					* different mddi clk rate
 					*/
 	} client_platform_data[];
-};
-
-struct msm_lcdc_timing {
-	unsigned int clk_rate;		/* dclk freq */
-	unsigned int hsync_pulse_width;	/* in dclks */
-	unsigned int hsync_back_porch;	/* in dclks */
-	unsigned int hsync_front_porch;	/* in dclks */
-	unsigned int hsync_skew;	/* in dclks */
-	unsigned int vsync_pulse_width;	/* in lines */
-	unsigned int vsync_back_porch;	/* in lines */
-	unsigned int vsync_front_porch;	/* in lines */
-
-	/* control signal polarity */
-	unsigned int vsync_act_low:1;
-	unsigned int hsync_act_low:1;
-	unsigned int den_act_low:1;
 };
 
 struct msm_lcdc_panel_ops {
@@ -221,6 +233,20 @@ int register_mdp_client(struct class_interface *class_intf);
 
 /**** private client data structs go below this line ***/
 
+struct panel_data {
+	int panel_id;
+	u32 caps;
+	int shrink;
+	/* backlight data */
+	u8 *pwm;
+	int min_level;
+	/* default_br used in turn on backlight, must sync with setting in user space */
+	int default_br;
+	int (*shrink_br)(int brightness);
+	int (*change_cabcmode)(struct msm_mddi_client_data *client_data,
+			int mode, u8 dimming);
+};
+
 struct msm_mddi_bridge_platform_data {
 	/* from board file */
 	int (*init)(struct msm_mddi_bridge_platform_data *,
@@ -232,11 +258,57 @@ struct msm_mddi_bridge_platform_data {
 		     struct msm_mddi_client_data *);
 	int (*unblank)(struct msm_mddi_bridge_platform_data *,
 		       struct msm_mddi_client_data *);
+	int (*shutdown)(struct msm_mddi_bridge_platform_data *,
+		       struct msm_mddi_client_data *);
 	struct msm_fb_data fb_data;
-
+	struct panel_data panel_conf;
+	/* for those MDDI client which need to re-position display region
+	   after each update or static electricity strike. It should be
+	   implemented in board-xxx-panel due to the function itself need to
+	   send the screen dimensional info of screen to MDDI client.
+	*/
+	void (*adjust)(struct msm_mddi_client_data *);
+#define SAMSUNG_D  0
+#define SAMSUNG_S6 1
+	int bridge_type;
+	int panel_type;
 	/* board file will identify what capabilities the panel supports */
-	uint32_t panel_caps;
+	uint32_t caps;
+	/* backlight data */
+	u8 *pwm;
 };
 
+/*
+ * This is used to communicate event between msm_fb, mddi, mddi_client, 
+ * and board.
+ * It's mainly used to reset the display system.
+ * Also, it is used for battery power policy.
+ *
+ */
+#define NOTIFY_MDDI     0x00000000
+#define NOTIFY_POWER    0x00000001
+#define NOTIFY_MSM_FB   0x00000010
+
+extern int register_display_notifier(struct notifier_block *nb);
+extern int display_notifier_call_chain(unsigned long val, void *data);
+ 
+#define display_notifier(fn, pri) {                     \
+	static struct notifier_block fn##_nb =          \
+	{ .notifier_call = fn, .priority = pri };       \
+	register_display_notifier(&fn##_nb);		\
+}
+
+#if (defined(CONFIG_USB_FUNCTION_PROJECTOR) || defined(CONFIG_USB_ANDROID_PROJECTOR))
+/* For USB Projector to quick access the frame buffer info */
+struct msm_fb_info {
+	unsigned char *fb_addr;
+	int msmfb_area;
+	int xres;
+	int yres;
+};
+
+extern int msmfb_get_var(struct msm_fb_info *tmp);
+extern int msmfb_get_fb_area(void);
+#endif
 
 #endif

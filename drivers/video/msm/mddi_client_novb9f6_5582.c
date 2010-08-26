@@ -17,10 +17,9 @@
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/gpio.h>
-#include <linux/sched.h>
-#include <linux/slab.h>
 #include <linux/wakelock.h>
 #include <mach/msm_fb.h>
+#include <linux/slab.h>
 
 static DECLARE_WAIT_QUEUE_HEAD(novtec_vsync_wait);
 
@@ -31,7 +30,6 @@ struct panel_info {
 	struct msmfb_callback *novtec_callback;
 	struct wake_lock idle_lock;
 	int novtec_got_int;
-	int irq;
 };
 
 static struct platform_device mddi_nov_cabc = {
@@ -148,12 +146,53 @@ static irqreturn_t novtec_vsync_interrupt(int irq, void *data)
 
 	panel->novtec_got_int = 1;
 	if (panel->novtec_callback) {
-//		mdelay(3);
+		mdelay(3);
 		panel->novtec_callback->func(panel->novtec_callback);
 		panel->novtec_callback = 0;
 	}
 	wake_up(&novtec_vsync_wait);
 	return IRQ_HANDLED;
+}
+
+static int setup_vsync(struct panel_info *panel,
+		       int init)
+{
+	int ret;
+	int gpio = 98;
+	unsigned int irq;
+
+	if (!init) {
+		ret = 0;
+		goto uninit;
+	}
+	ret = gpio_request(gpio, "vsync");
+	if (ret)
+		goto err_request_gpio_failed;
+
+	ret = gpio_direction_input(gpio);
+	if (ret)
+		goto err_gpio_direction_input_failed;
+
+	ret = irq = gpio_to_irq(gpio);
+	if (ret < 0)
+		goto err_get_irq_num_failed;
+
+	ret = request_irq(irq, novtec_vsync_interrupt, IRQF_TRIGGER_FALLING,
+			  "vsync", panel);
+	if (ret)
+		goto err_request_irq_failed;
+	printk(KERN_INFO "vsync on gpio %d now %d\n",
+	       gpio, gpio_get_value(gpio));
+	return 0;
+
+uninit:
+	free_irq(gpio_to_irq(gpio), panel);
+err_request_irq_failed:
+err_get_irq_num_failed:
+err_gpio_direction_input_failed:
+	gpio_free(gpio);
+err_request_gpio_failed:
+	return ret;
 }
 
 static int mddi_novtec_probe(struct platform_device *pdev)
@@ -162,6 +201,7 @@ static int mddi_novtec_probe(struct platform_device *pdev)
 	struct msm_mddi_client_data *client_data = pdev->dev.platform_data;
 	struct msm_mddi_bridge_platform_data *bridge_data =
 		client_data->private_client_data;
+	struct panel_data *panel_data = &bridge_data->panel_conf;
 	struct panel_info *panel =
 		kzalloc(sizeof(struct panel_info), GFP_KERNEL);
 
@@ -169,23 +209,18 @@ static int mddi_novtec_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	platform_set_drvdata(pdev, panel);
 
-	if (bridge_data->panel_caps & MSMFB_CAP_CABC) {
+	printk(KERN_DEBUG "%s\n", __func__);
+
+	if (panel_data->caps & MSMFB_CAP_CABC) {
 		printk(KERN_INFO "CABC enabled\n");
 		mddi_nov_cabc.dev.platform_data = client_data;
 		platform_device_register(&mddi_nov_cabc);
 	}
 
-	ret = platform_get_irq_byname(pdev, "vsync");
-	if (ret < 0)
-		goto err_plat_get_irq;
-
-	panel->irq = ret;
-	printk(KERN_DEBUG "%s: Requesting irq=%d; value=%d\n", __func__, ret, gpio_get_value(98));
-	ret = request_irq(panel->irq, novtec_vsync_interrupt,
-			  IRQF_TRIGGER_FALLING, "vsync", panel);
+	ret = setup_vsync(panel, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "mddi_bridge_setup_vsync failed\n");
-		goto err_req_irq;
+		return ret;
 	}
 
 	panel->client_data = client_data;
@@ -208,19 +243,13 @@ static int mddi_novtec_probe(struct platform_device *pdev)
 	wake_lock_init(&panel->idle_lock, WAKE_LOCK_IDLE, "nov_idle_lock");
 
 	return 0;
-
-err_req_irq:
-err_plat_get_irq:
-	kfree(panel);
-	return ret;
 }
 
 static int mddi_novtec_remove(struct platform_device *pdev)
 {
 	struct panel_info *panel = platform_get_drvdata(pdev);
 
-	platform_set_drvdata(pdev, NULL);
-	free_irq(panel->irq, panel);
+	setup_vsync(panel, 0);
 	kfree(panel);
 	return 0;
 }

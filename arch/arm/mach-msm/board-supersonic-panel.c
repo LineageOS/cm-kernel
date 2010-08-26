@@ -29,8 +29,8 @@
 #include <mach/msm_fb.h>
 #include <mach/msm_iomap.h>
 #include <mach/vreg.h>
+/* #include <mach/pmic.h> */
 
-#include "pmic.h"
 #include "board-supersonic.h"
 #include "devices.h"
 #include "proc_comm.h"
@@ -52,12 +52,6 @@ static struct cabc_t {
 	struct mutex lock;
 	unsigned long status;
 } cabc;
-
-struct spi_cmd {
-	unsigned char reg;
-	unsigned char val;
-	unsigned int delay;
-};
 
 enum {
 	GATE_ON = 1 << 0,
@@ -433,11 +427,9 @@ static void suc_set_brightness(struct led_classdev *led_cdev,
 	struct msm_mddi_client_data *client = cabc.client_data;
 	unsigned int shrink_br = val;
 
-	if (test_bit(GATE_ON, &cabc.status) == 0) {
-		printk(KERN_DEBUG "%s: cabc.status has GATE_ON!\n", __func__);
-		return;
-	}
 	printk(KERN_DEBUG "set brightness = %d\n", val);
+	if (test_bit(GATE_ON, &cabc.status) == 0)
+		return;
 
 	if (val < 30)
 		shrink_br = 5;
@@ -537,19 +529,6 @@ supersonic_mddi_init(struct msm_mddi_bridge_platform_data *bridge_data,
 	int i = 0, ret;
 	unsigned reg, val;
 
-	static struct spi_cmd sharp_spi[] = {
-		{0x0, 0x11, 100},
-
-		{0x0, 0xB9, 0},
-		{0x1, 0xFF, 0},
-		{0x1, 0x83, 0},
-		{0x1, 0x63, 0},
-
-		{0x0, 0x3A, 0},
-		{0x1, 0x50, 0},
-	};
-
-
 	if (panel_type == PANEL_SHARP) {
 		client_data->auto_hibernate(client_data, 0);
 		for (i = 0; i < ARRAY_SIZE(s1d13775_init_seq); i++) {
@@ -561,6 +540,22 @@ supersonic_mddi_init(struct msm_mddi_bridge_platform_data *bridge_data,
 				client_data->remote_write(client_data, cpu_to_le32(val), reg);
 		}
 		client_data->auto_hibernate(client_data, 1);
+
+		struct spi_cmd {
+			unsigned char reg;
+			unsigned char val;
+			unsigned int delay;
+		} sharp_spi[] = {
+			{0x0, 0x11, 100},
+
+			{0x0, 0xB9, 0},
+			{0x1, 0xFF, 0},
+			{0x1, 0x83, 0},
+			{0x1, 0x63, 0},
+
+			{0x0, 0x3A, 0},
+			{0x1, 0x50, 0},
+		};
 
 		/* FIXME */
 
@@ -593,14 +588,18 @@ supersonic_mddi_uninit(struct msm_mddi_bridge_platform_data *bridge_data,
 {
 	if (panel_type == PANEL_SHARP) {
 		int i, ret;
-		struct spi_cmd sharp_spi[] = {
+		struct spi_cmd {
+		unsigned char reg;
+		unsigned char val;
+		unsigned int delay;
+		} sharp_spi[] = {
 			{0x0, 0x28, 0},
 			{0x0, 0x10, 100},
 		};
 
 		/* FIXME */
 
-		for (i = 0; i < ARRAY_SIZE(sharp_spi); i++) {
+	        for (i = 0; i < ARRAY_SIZE(sharp_spi); i++) {
 			ret = qspi_send_9bit(sharp_spi[i].reg, sharp_spi[i].val);
 			if (ret < 0)
 				printk("%s: spi_write fail!\n", __func__);
@@ -622,8 +621,6 @@ static int backlight_control(int on)
 	u8 buf[] = {0x90, 0x00, 0x00, 0x08};
 	int ret = -EIO, max_retry = 3;
 
-	printk(KERN_DEBUG "%s: %d\n", __func__, on);
-
 	msg.addr = 0xcc >> 1;
 	msg.flags = 0;
 	msg.len = sizeof(buf);
@@ -633,11 +630,7 @@ static int backlight_control(int on)
 		buf[0] = 0x91;
 
 	while (max_retry--) {
-		if (adap)
-			ret = i2c_transfer(adap, &msg, 1);
-		else
-			break;
-
+		ret = i2c_transfer(adap, &msg, 1);
 		if (ret != 1)
 			msleep(1);
 		else {
@@ -697,7 +690,9 @@ static struct msm_mddi_bridge_platform_data novatec_client_data = {
 		.height = 80,
 		.output_format = 0,
 	},
-	.panel_caps = MSMFB_CAP_CABC,
+	.panel_conf = {
+		.caps = MSMFB_CAP_CABC,
+	},
 };
 
 static struct msm_mddi_bridge_platform_data epson_client_data = {
@@ -712,7 +707,9 @@ static struct msm_mddi_bridge_platform_data epson_client_data = {
 		.height = 80,
 		.output_format = 0,
 	},
-	.panel_caps = MSMFB_CAP_CABC,
+	.panel_conf = {
+		.caps = MSMFB_CAP_CABC,
+	},
 };
 
 
@@ -739,11 +736,11 @@ static uint32_t spi_off_gpio_table[] = {
 
 static int spi_gpio_switch(int on)
 {
-	printk(KERN_DEBUG "%s: %s\n", __func__, on ? "on" : "off");
+        config_gpio_table(
+                !!on ? spi_on_gpio_table : spi_off_gpio_table,
+                ARRAY_SIZE(spi_on_gpio_table));
 
-	config_gpio_table(on ? spi_on_gpio_table : spi_off_gpio_table,
-		ARRAY_SIZE(spi_on_gpio_table));
-	return 0;
+        return 0;
 }
 
 static void
@@ -865,7 +862,6 @@ static struct msm_mddi_platform_data mddi_pdata = {
 			.clk_rate = 0,
 		},
 	},
-	.vsync_irq = MSM_GPIO_TO_INT(98),
 };
 
 static struct platform_driver suc_backlight_driver = {
@@ -883,10 +879,7 @@ int __init supersonic_init_panel(void)
 {
 	int rc;
 
-	if (!machine_is_supersonic())
-		return -1;
-
-	B(KERN_INFO "%s: panel_type=%d\n", __func__, panel_type);
+	B(KERN_INFO "%s: enter.\n", __func__);
 
 	vreg_lcd_1v8 = vreg_get(0, "gp4");
 	if (IS_ERR(vreg_lcd_1v8))
@@ -896,20 +889,17 @@ int __init supersonic_init_panel(void)
 	if (IS_ERR(vreg_lcd_2v8))
 		return PTR_ERR(vreg_lcd_2v8);
 
-	if (panel_type == PANEL_SHARP) {
+	if (panel_type == PANEL_SHARP)
 		mdp_pdata.overrides |= MSM_MDP_PANEL_IGNORE_PIXEL_DATA;
-		mdp_pdata.color_format = MSM_MDP_OUT_IF_FMT_RGB565;
-	} else {
+	else
 		mdp_pdata.overrides &= ~MSM_MDP_PANEL_IGNORE_PIXEL_DATA;
-		mdp_pdata.color_format = MSM_MDP_OUT_IF_FMT_RGB666;
-	}
-	msm_device_mdp.dev.platform_data = &mdp_pdata;
 
+	msm_device_mdp.dev.platform_data = &mdp_pdata;
 	rc = platform_device_register(&msm_device_mdp);
 	if (rc)
 		return rc;
 
-	if (panel_type == PANEL_AUO)
+	if (panel_type)
 		mddi_pdata.power_client = mddi_novatec_power;
 	else
 		mddi_pdata.power_client = mddi_epson_power;
@@ -919,7 +909,7 @@ int __init supersonic_init_panel(void)
 	if (rc)
 		return rc;
 
-	if (panel_type == PANEL_AUO)
+	if (panel_type)
 		suc_backlight_driver.driver.name = "nov_cabc";
 	else
 		suc_backlight_driver.driver.name = "eps_cabc";

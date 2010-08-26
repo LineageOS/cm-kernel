@@ -33,10 +33,13 @@
 #include <linux/clk.h>
 #include <linux/debugfs.h>
 #include <linux/dma-mapping.h>
+#include <linux/android_pmem.h>
 
 extern void start_drawing_late_resume(struct early_suspend *h);
+static void msmfb_resume_handler(struct early_suspend *h);
+static void msmfb_resume(struct work_struct *work);
 
-#define MSMFB_DEBUG 0
+#define MSMFB_DEBUG 1
 #ifdef CONFIG_FB_MSM_LOGO
 #define INIT_IMAGE_FILE "/logo.rle"
 extern int load_565rle_image(char *filename);
@@ -59,13 +62,12 @@ extern int load_565rle_image(char *filename);
 
 #define DLOG(mask, fmt, args...) \
 do { \
-	if (msmfb_debug_mask & mask) \
+	if ((msmfb_debug_mask | SUSPEND_RESUME) & mask) \
 		printk(KERN_INFO "msmfb: "fmt, ##args); \
 } while (0)
 
 #define BITS_PER_PIXEL(info) (info->fb->var.bits_per_pixel)
 #define BYTES_PER_PIXEL(info) (info->fb->var.bits_per_pixel >> 3)
-
 static int msmfb_debug_mask;
 module_param_named(msmfb_debug_mask, msmfb_debug_mask, int,
 		   S_IRUGO | S_IWUSR | S_IWGRP);
@@ -106,6 +108,51 @@ struct msmfb_info {
 	ktime_t vsync_request_time;
 	unsigned fb_resumed;
 };
+
+#ifdef CONFIG_FB_MSM_OVERLAY
+#define USE_OVERLAY	1
+struct overlay_waitevent{
+	uint32_t waked_up;
+	wait_queue_head_t event_wait;
+};
+static struct overlay_waitevent overlay_event;
+DEFINE_MUTEX(overlay_event_lock);
+#endif
+
+#if (defined(CONFIG_USB_FUNCTION_PROJECTOR) || defined(CONFIG_USB_ANDROID_PROJECTOR))
+static spinlock_t fb_data_lock = SPIN_LOCK_UNLOCKED;
+static struct msm_fb_info msm_fb_data;
+int msmfb_get_var(struct msm_fb_info *tmp)
+{
+	unsigned long flags;
+	spin_lock_irqsave(&fb_data_lock, flags);
+	memcpy(tmp, &msm_fb_data, sizeof(msm_fb_data));
+	spin_unlock_irqrestore(&fb_data_lock, flags);
+	return 0;
+}
+
+/* projector need this, and very much */
+int msmfb_get_fb_area(void)
+{
+	int area;
+	unsigned long flags;
+	spin_lock_irqsave(&fb_data_lock, flags);
+	area = msm_fb_data.msmfb_area;
+	spin_unlock_irqrestore(&fb_data_lock, flags);
+	return area;
+}
+
+static void msmfb_set_var(unsigned char *addr, int area)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&fb_data_lock, flags);
+	msm_fb_data.fb_addr = addr;
+	msm_fb_data.msmfb_area = area;
+	spin_unlock_irqrestore(&fb_data_lock, flags);
+
+}
+#endif
 
 static int msmfb_open(struct fb_info *info, int user)
 {
@@ -218,7 +265,6 @@ static void msmfb_handle_vsync_interrupt(struct msmfb_callback *callback)
 {
 	struct msmfb_info *msmfb = container_of(callback, struct msmfb_info,
 					       vsync_callback);
-
 	wake_unlock(&msmfb->idle_lock);
 	msmfb_start_dma(msmfb);
 }
@@ -227,7 +273,6 @@ static enum hrtimer_restart msmfb_fake_vsync(struct hrtimer *timer)
 {
 	struct msmfb_info *msmfb  = container_of(timer, struct msmfb_info,
 					       fake_vsync);
-
 	msmfb_start_dma(msmfb);
 	return HRTIMER_NORESTART;
 }
@@ -250,6 +295,15 @@ static void msmfb_pan_update(struct fb_info *info, uint32_t left, uint32_t top,
 
 	DLOG(SHOW_UPDATES, "update %d %d %d %d %d %d\n",
 		left, top, eright, ebottom, yoffset, pan_display);
+
+        if (msmfb->sleeping != AWAKE)
+                DLOG(SUSPEND_RESUME, "pan_update in state(%d)\n", msmfb->sleeping);
+
+#if (defined(CONFIG_USB_FUNCTION_PROJECTOR) || defined(CONFIG_USB_ANDROID_PROJECTOR))
+	/* Jay, 8/1/09' */
+	msmfb_set_var(msmfb->fb->screen_base, yoffset);
+#endif
+
 restart:
 	spin_lock_irqsave(&msmfb->update_lock, irq_flags);
 
@@ -266,8 +320,8 @@ restart:
 
 	sleeping = msmfb->sleeping;
 	/* on a full update, if the last frame has not completed, wait for it */
-	if ((pan_display && msmfb->frame_requested != msmfb->frame_done) ||
-			    sleeping == UPDATING) {
+	if (pan_display && (msmfb->frame_requested != msmfb->frame_done ||
+			    sleeping == UPDATING)) {
 		int ret;
 		spin_unlock_irqrestore(&msmfb->update_lock, irq_flags);
 		ret = wait_event_interruptible_timeout(msmfb->frame_wq,
@@ -275,9 +329,11 @@ restart:
 			msmfb->sleeping != UPDATING, 5 * HZ);
 		if (ret <= 0 && (msmfb->frame_requested != msmfb->frame_done ||
 				 msmfb->sleeping == UPDATING)) {
-			if (retry && panel->request_vsync && (sleeping == AWAKE)) {
+			if (retry && panel->request_vsync &&
+			    (sleeping == AWAKE)) {
 				wake_lock_timeout(&msmfb->idle_lock, HZ/4);
-				panel->request_vsync(panel, &msmfb->vsync_callback);
+				panel->request_vsync(panel,
+					&msmfb->vsync_callback);
 				retry = 0;
 				printk(KERN_WARNING "msmfb_pan_display timeout "
 					"rerequest vsync\n");
@@ -365,10 +421,8 @@ static void power_on_panel(struct work_struct *work)
 		container_of(work, struct msmfb_info, resume_work);
 	struct msm_panel_data *panel = msmfb->panel;
 	unsigned long irq_flags;
-
 	mutex_lock(&msmfb->panel_init_lock);
 	DLOG(SUSPEND_RESUME, "turning on panel\n");
-
 	if (msmfb->sleeping == UPDATING) {
 		wake_lock_timeout(&msmfb->idle_lock, HZ);
 		if (panel->unblank(panel)) {
@@ -386,6 +440,34 @@ error:
 	mutex_unlock(&msmfb->panel_init_lock);
 }
 
+static BLOCKING_NOTIFIER_HEAD(display_chain_head);                               
+int register_display_notifier(struct notifier_block *nb)                  
+{                                                                                
+	return blocking_notifier_chain_register(&display_chain_head, nb);        
+}                                                                                
+static int display_notifier_callback(struct notifier_block *nfb,                 
+		unsigned long action,                       
+		void *ignored)                              
+{                                                                                
+	struct msmfb_info *msm_fb = (struct msmfb_info *)ignored;
+	
+	switch (action) {
+	case NOTIFY_MSM_FB:
+		printk(KERN_DEBUG "NOTIFY_MSM_FB\n");
+		//msmfb_resume(&msm_fb->early_suspend);
+		break;
+	case NOTIFY_POWER:
+		/* nothing to do */
+		break;
+	default:
+		printk(KERN_ERR "%s: unknown action in 0x%lx\n",
+				__func__, action);
+		return NOTIFY_BAD;
+	}
+	return NOTIFY_OK;
+}                                                                                
+
+/* -------------------------------------------------------------------------- */ 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 /* turn off the panel */
 static void msmfb_earlier_suspend(struct early_suspend *h)
@@ -402,12 +484,12 @@ static void msmfb_earlier_suspend(struct early_suspend *h)
 	spin_unlock_irqrestore(&msmfb->update_lock, irq_flags);
 	wait_event_timeout(msmfb->frame_wq,
 			   msmfb->frame_requested == msmfb->frame_done, HZ/10);
-
+#ifndef CONFIG_MSM_MDP40
 	mdp->dma(mdp, virt_to_phys(msmfb->black), 0,
 		 msmfb->fb->var.xres, msmfb->fb->var.yres, 0, 0,
 		 NULL, panel->interface_type);
 	mdp->dma_wait(mdp, panel->interface_type);
-
+#endif
 	/* turn off the panel */
 	panel->blank(panel);
 }
@@ -418,6 +500,14 @@ static void msmfb_suspend(struct early_suspend *h)
 						early_suspend);
 	struct msm_panel_data *panel = msmfb->panel;
 	/* suspend the panel */
+#ifdef CONFIG_FB_MSM_OVERLAY
+	/*check whether overlay done*/
+	wait_event_interruptible_timeout(
+		overlay_event.event_wait,
+		(overlay_event.waked_up == ~USE_OVERLAY),
+		10*HZ);
+	pr_info("wait event : %X\n", overlay_event.waked_up);
+#endif
 	panel->suspend(panel);
 	msmfb->fb_resumed = 0;
 	mutex_unlock(&msmfb->panel_init_lock);
@@ -426,16 +516,15 @@ static void msmfb_suspend(struct early_suspend *h)
 static void msmfb_resume_handler(struct early_suspend *h)
 {
 	struct msmfb_info *msmfb = container_of(h, struct msmfb_info,
-						early_suspend);
-
+					early_suspend);
 	queue_work(msmfb->resume_workqueue, &msmfb->msmfb_resume_work);
-	wait_event_interruptible_timeout(msmfb->frame_wq, msmfb->fb_resumed==1, HZ/2);
+	wait_event_interruptible_timeout(msmfb->frame_wq, msmfb->fb_resumed==1,HZ/2);
 }
 
 static void msmfb_resume(struct work_struct *work)
 {
-	struct msmfb_info *msmfb = container_of(work, struct msmfb_info,
-						msmfb_resume_work);
+	struct msmfb_info *msmfb =
+		container_of(work, struct msmfb_info, msmfb_resume_work);
 	struct msm_panel_data *panel = msmfb->panel;
 	unsigned long irq_flags;
 
@@ -497,7 +586,6 @@ static int msmfb_set_par(struct fb_info *info)
 		return -1;
 	mdp->set_output_format(mdp, var->bits_per_pixel);
 	fix->line_length = var->xres * var->bits_per_pixel / 8;
-
 	return 0;
 }
 
@@ -571,6 +659,91 @@ static int msmfb_blit(struct fb_info *info,
 	}
 	return 0;
 }
+#ifdef CONFIG_FB_MSM_OVERLAY
+static int msmfb_overlay_get(struct fb_info *info, void __user *p)
+{
+	struct mdp_overlay req;
+	int ret;
+
+	if (copy_from_user(&req, p, sizeof(req)))
+		return -EFAULT;
+
+	ret = mdp->overlay_get(mdp, info, &req);
+
+	if (ret) {
+		printk(KERN_ERR "%s: ioctl failed \n",
+			__func__);
+		return ret;
+	}
+	if (copy_to_user(p, &req, sizeof(req))) {
+		printk(KERN_ERR "%s: copy2user failed \n",
+			__func__);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static int msmfb_overlay_set(struct fb_info *info, void __user *p)
+{
+	struct mdp_overlay req;
+	int ret;
+
+	if (copy_from_user(&req, p, sizeof(req)))
+		return -EFAULT;
+
+	ret = mdp->overlay_set(mdp, info, &req);
+	if (ret) {
+		printk(KERN_ERR "%s:ioctl failed \n",
+			__func__);
+		return ret;
+	}
+
+	if (copy_to_user(p, &req, sizeof(req))) {
+		printk(KERN_ERR "%s: copy2user failed \n",
+			__func__);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static int msmfb_overlay_unset(struct fb_info *info, unsigned long *argp)
+{
+	int	ret, ndx;
+
+	ret = copy_from_user(&ndx, argp, sizeof(ndx));
+	if (ret) {
+		printk(KERN_ERR "%s:msmfb_overlay_unset ioctl failed \n",
+			__func__);
+		return ret;
+	}
+
+	return mdp->overlay_unset(mdp, info, ndx);
+}
+
+static int msmfb_overlay_play(struct fb_info *info, unsigned long *argp)
+{
+	int	ret;
+	struct msmfb_overlay_data req;
+	struct file *p_src_file = 0;
+
+	ret = copy_from_user(&req, argp, sizeof(req));
+	if (ret) {
+		printk(KERN_ERR "%s:msmfb_overlay_play ioctl failed \n",
+			__func__);
+		return ret;
+	}
+
+	ret = mdp->overlay_play(mdp, info, &req, &p_src_file);
+
+	if (p_src_file)
+		put_pmem_file(p_src_file);
+
+	return ret;
+}
+
+#endif
 
 
 DEFINE_MUTEX(mdp_ppp_lock);
@@ -600,6 +773,38 @@ static int msmfb_ioctl(struct fb_info *p, unsigned int cmd, unsigned long arg)
 		       ktime_to_ns(t2) - ktime_to_ns(t1));
 #endif
 		break;
+#ifdef CONFIG_FB_MSM_OVERLAY
+	case MSMFB_OVERLAY_GET:
+		printk("CONFIG_FB_MSM_OVERLAY\n");
+		//down(&mdp_ppp_lock);
+		ret = msmfb_overlay_get(p, argp);
+		//up(&mdp_ppp_lock);
+		break;
+	case MSMFB_OVERLAY_SET:
+		printk("MSMFB_OVERLAY_SET\n");
+		//down(&mdp_ppp_lock);
+		ret = msmfb_overlay_set(p, argp);
+		mutex_lock(&overlay_event_lock);
+		overlay_event.waked_up = USE_OVERLAY;
+		mutex_unlock(&overlay_event_lock);
+		//up(&mdp_ppp_lock);
+		break;
+	case MSMFB_OVERLAY_UNSET:
+		printk("MSMFB_OVERLAY_UNSET\n");
+		//down(&mdp_ppp_lock);
+		ret = msmfb_overlay_unset(p, argp);
+		mutex_lock(&overlay_event_lock);
+		overlay_event.waked_up = ~USE_OVERLAY;
+		wake_up(&overlay_event.event_wait);
+		mutex_unlock(&overlay_event_lock);
+		//up(&mdp_ppp_lock);
+		break;
+	case MSMFB_OVERLAY_PLAY:
+		//down(&mdp_ppp_lock);
+		ret = msmfb_overlay_play(p, argp);
+		//up(&mdp_ppp_lock);
+		break;
+#endif
 	default:
 			printk(KERN_INFO "msmfb unknown ioctl: %d\n", cmd);
 			return -EINVAL;
@@ -662,6 +867,8 @@ static struct file_operations debug_fops = {
 };
 #endif
 
+#define BITS_PER_PIXEL 16
+
 static void setup_fb_info(struct msmfb_info *msmfb)
 {
 	struct fb_info *fb_info = msmfb->fb;
@@ -677,13 +884,14 @@ static void setup_fb_info(struct msmfb_info *msmfb)
 	fb_info->fix.type = FB_TYPE_PACKED_PIXELS;
 	fb_info->fix.visual = FB_VISUAL_TRUECOLOR;
 	fb_info->fix.line_length = msmfb->xres * 2;
+
 	fb_info->var.xres = msmfb->xres;
 	fb_info->var.yres = msmfb->yres;
 	fb_info->var.width = msmfb->panel->fb_data->width;
 	fb_info->var.height = msmfb->panel->fb_data->height;
 	fb_info->var.xres_virtual = msmfb->xres;
 	fb_info->var.yres_virtual = msmfb->yres * 2;
-	fb_info->var.bits_per_pixel = 16;
+	fb_info->var.bits_per_pixel = BITS_PER_PIXEL;
 	fb_info->var.accel_flags = 0;
 
 	fb_info->var.yoffset = 0;
@@ -692,8 +900,11 @@ static void setup_fb_info(struct msmfb_info *msmfb)
 		/* set the param in the fixed screen, so userspace can't
 		 * change it. This will be used to check for the
 		 * capability. */
+
+		/* FIX ME: every panel support partial update?
 		fb_info->fix.reserved[0] = 0x5444;
 		fb_info->fix.reserved[1] = 0x5055;
+		*/
 
 		/* This preloads the value so that if userspace doesn't
 		 * change it, it will be a full update */
@@ -721,6 +932,14 @@ static void setup_fb_info(struct msmfb_info *msmfb)
 	PP[0] = 0;
 	for (r = 1; r < 16; r++)
 		PP[r] = 0xffffffff;
+
+	/* Jay add, 7/1/09' */
+#if (defined(CONFIG_USB_FUNCTION_PROJECTOR) || defined(CONFIG_USB_ANDROID_PROJECTOR))
+	msm_fb_data.xres = msmfb->xres;
+	msm_fb_data.yres = msmfb->yres;
+	printk(KERN_INFO "setup_fb_info msmfb->xres %d, msmfb->yres %d\n",
+				msmfb->xres,msmfb->yres);
+#endif
 }
 
 static int setup_fbmem(struct msmfb_info *msmfb, struct platform_device *pdev)
@@ -785,6 +1004,11 @@ static int msmfb_probe(struct platform_device *pdev)
 	if (ret)
 		goto error_setup_fbmem;
 
+#if (defined(CONFIG_USB_FUNCTION_PROJECTOR) || defined(CONFIG_USB_ANDROID_PROJECTOR))
+	/* Jay, 8/1/09' */
+	msmfb_set_var(msmfb->fb->screen_base, 0);
+#endif
+
 	setup_fb_info(msmfb);
 
 	spin_lock_init(&msmfb->update_lock);
@@ -827,7 +1051,6 @@ static int msmfb_probe(struct platform_device *pdev)
 	hrtimer_init(&msmfb->fake_vsync, CLOCK_MONOTONIC,
 		     HRTIMER_MODE_REL);
 
-
 	msmfb->fake_vsync.function = msmfb_fake_vsync;
 
 	ret = register_framebuffer(fb);
@@ -835,6 +1058,13 @@ static int msmfb_probe(struct platform_device *pdev)
 		goto error_register_framebuffer;
 
 	msmfb->sleeping = WAKING;
+
+#ifdef CONFIG_FB_MSM_OVERLAY
+	/*init wait event*/
+	init_waitqueue_head(&overlay_event.event_wait);
+	/*init waked_up value*/
+	overlay_event.waked_up = ~USE_OVERLAY;
+#endif
 
 #ifdef CONFIG_FB_MSM_LOGO
 	if (!load_565rle_image(INIT_IMAGE_FILE)) {
@@ -847,6 +1077,8 @@ static int msmfb_probe(struct platform_device *pdev)
 				 fb->var.yres, 0, 1);
 	}
 #endif
+	/* Jay, 29/12/08' */
+	display_notifier(display_notifier_callback, NOTIFY_MSM_FB);
 	return 0;
 
 error_register_framebuffer:
@@ -859,9 +1091,35 @@ error_setup_fbmem:
 	return ret;
 }
 
+static void msmfb_shutdown(struct platform_device *pdev)
+{
+	struct msm_panel_data *panel = pdev->dev.platform_data;
+	struct fb_info *fb;
+	struct msmfb_info *msmfb;
+
+	printk(KERN_INFO "%s\n", __func__);
+	fb = registered_fb[0];
+	if (!fb) {
+		printk(KERN_ERR "fb0 unavailable.\n");
+		return;
+	}
+	msmfb = fb->par;
+
+	mdp->dma(mdp, virt_to_phys(msmfb->black), 0,
+			msmfb->fb->var.xres, msmfb->fb->var.yres, 0, 0,
+			NULL, panel->interface_type);
+
+	if (panel->blank)
+		panel->blank(panel);
+
+	if (panel->shutdown)
+		panel->shutdown(panel);
+}
+
 static struct platform_driver msm_panel_driver = {
 	/* need to write remove */
 	.probe = msmfb_probe,
+	.shutdown = msmfb_shutdown,
 	.driver = {.name = "msm_panel"},
 };
 
