@@ -737,7 +737,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 		vruntime += sched_vslice(cfs_rq, se);
 
 	/* sleeps up to a single latency don't count. */
-	if (!initial && sched_feat(FAIR_SLEEPERS)) {
+	if (sched_feat(FAIR_SLEEPERS) && !initial) {
 		unsigned long thresh = sysctl_sched_latency;
 
 		/*
@@ -2474,7 +2474,7 @@ static inline void update_sg_lb_stats(struct sched_domain *sd,
 	 * Consider the group unbalanced when the imbalance is larger
 	 * than the average weight of two tasks.
 	 *
-	 * APZ: with cgroup the avg task weight can vary wildly and
+	 n APZ: with cgroup the avg task weight can vary wildly and
 	 *      might not be a suitable number - should we keep a
 	 *      normalized nr_running number somewhere that negates
 	 *      the hierarchy?
