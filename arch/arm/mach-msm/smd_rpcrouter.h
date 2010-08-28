@@ -157,7 +157,12 @@ struct msm_rpc_endpoint {
 	struct wake_lock read_q_wake_lock;
 	wait_queue_head_t wait_q;
 	unsigned flags;
-
+#if defined(CONFIG_ARCH_MSM7X30)
+	/* restart handling */
+	int restart_state;
+	spinlock_t restart_lock;
+	wait_queue_head_t restart_wait;
+#endif
 	/* endpoint address */
 	uint32_t pid;
 	uint32_t cid;
@@ -171,10 +176,16 @@ struct msm_rpc_endpoint {
 	uint32_t dst_prog; /* be32 */
 	uint32_t dst_vers; /* be32 */
 
-	/* RPC_REPLY writes must be routed to the pid/cid of the
-	 * RPC_CALL they are in reply to.  Keep a cache of valid
-	 * xid/pid/cid groups.  pid 0xffffffff -> not valid.
+	/* reply remote address
+	 * if reply_pid == 0xffffffff, none available
+	 * RPC_REPLY writes may only go to the pid/cid/xid of the
+	 * last RPC_CALL we received.
 	 */
+	uint32_t reply_pid;
+	uint32_t reply_cid;
+	uint32_t reply_xid; /* be32 */
+	uint32_t next_pm;   /* Pacmark sequence */
+
 	unsigned next_rroute;
 	struct msm_reply_route rroute[MAX_REPLY_ROUTE];
 
