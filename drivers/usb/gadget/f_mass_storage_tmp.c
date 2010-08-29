@@ -73,6 +73,7 @@
 #include <linux/usb_usual.h>
 #include <linux/usb/ch9.h>
 #include <linux/usb/android_composite.h>
+#include <mach/board.h>
 
 #include "gadget_chips.h"
 
@@ -321,6 +322,7 @@ struct fsg_dev {
 	enum fsg_state		state;		/* For exception handling */
 
 	u8			config, new_config;
+	u8			ums_state;
 
 	unsigned int		running : 1;
 	unsigned int		bulk_in_enabled : 1;
@@ -397,8 +399,35 @@ static struct fsg_dev			*the_fsg;
 static void	close_backing_file(struct fsg_dev *fsg, struct lun *curlun);
 static void	close_all_backing_files(struct fsg_dev *fsg);
 static int fsync_sub(struct lun *curlun);
+static void fsg_set_ums_state(int connect_status);
+
+static struct t_usb_status_notifier connect_status_notifier = {
+	.name = "connect_status",
+	.func = fsg_set_ums_state,
+};
 
 /*-------------------------------------------------------------------------*/
+
+static void fsg_set_ums_state(int connect_status)
+{
+	if (!the_fsg)
+		return;
+	printk(KERN_INFO "%s: %d\n", __func__, connect_status);
+	/* USB connected */
+	if (connect_status == 1) {
+		if (!the_fsg->ums_state) {
+			the_fsg->ums_state = 1;
+			printk(KERN_INFO "ums: set state 1\n");
+			switch_set_state(&the_fsg->sdev, 1);
+		}
+	} else {
+		if (the_fsg->ums_state) {
+			the_fsg->ums_state = 0;
+			printk(KERN_INFO "ums: set state 0\n");
+			switch_set_state(&the_fsg->sdev, 0);
+		}
+	}
+}
 
 #ifdef DUMP_MSGS
 
@@ -2970,6 +2999,7 @@ int mass_storage_bind_config(struct usb_configuration *c)
 	fsg->function.set_alt = fsg_function_set_alt;
 	fsg->function.disable = fsg_function_disable;
 
+	usb_register_notifier(&connect_status_notifier);
 	rc = usb_add_function(c, &fsg->function);
 	if (rc != 0)
 		goto err_usb_add_function;

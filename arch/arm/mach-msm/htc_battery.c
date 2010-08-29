@@ -27,6 +27,7 @@
 #include <mach/board.h>
 #include <asm/mach-types.h>
 #include <mach/board_htc.h>
+#include <mach/msm_fb.h> /* Jay, to register display notifier */
 #include <mach/htc_battery.h>
 #include <linux/rtc.h>
 #ifdef CONFIG_HTC_BATTCHG_SMEM
@@ -36,15 +37,13 @@
 #if defined(CONFIG_TROUT_BATTCHG_DOCK)
 #include <mach/htc_one_wire.h>
 #endif
-
-#if defined(CONFIG_BATTERY_DS2784)
+#ifdef CONFIG_BATTERY_DS2784
 #include <linux/ds2784_battery.h>
-#elif defined(CONFIG_BATTERY_DS2746)
+#elif CONFIG_BATTERY_DS2746
 #include <linux/ds2746_battery.h>
 #endif
 
-#include <mach/smb329.h>
-#include <mach/notify.h>
+#include <linux/smb329.h>
 
 static struct wake_lock vbus_wake_lock;
 
@@ -254,7 +253,6 @@ static int htc_power_policy(struct notifier_block *nfb,
 {
 	int rc;
 	switch (action) {
-#if 0
 	case NOTIFY_POWER:
 		pr_info("%s: enter.\n", __func__);
 		rc = __htc_power_policy();
@@ -262,7 +260,6 @@ static int htc_power_policy(struct notifier_block *nfb,
 			return NOTIFY_STOP;
 		else
 			return NOTIFY_OK;
-#endif
 	}
 	return NOTIFY_DONE; /* we did not care other action here */
 }
@@ -1284,14 +1281,14 @@ static int update_batt_info(void)
 		}
 #endif
 		break;
-#if defined(CONFIG_BATTERY_DS2784)
+#ifdef CONFIG_BATTERY_DS2784
 	case GUAGE_DS2784:
 		if (ds2784_get_battery_info(&htc_batt_info.rep)) {
 			BATT_ERR("%s: ds2784 read failed!!!", __func__);
 			ret = -1;
 		}
 		break;
-#elif defined(CONFIG_BATTERY_DS2746)
+#elif CONFIG_BATTERY_DS2746
 	case GUAGE_DS2746:
 		if (ds2746_get_battery_info(&htc_batt_info.rep)) {
 			BATT_ERR("%s: ds2746 read failed!!!", __func__);
@@ -1538,8 +1535,8 @@ static int ds2784_notifier_func(struct notifier_block *nfb,
 	case DS2784_CHARGING_CONTROL:
 		if (htc_batt_info.charger == LINEAR_CHARGER)
 			battery_charging_ctrl(arg);
-//		else if(htc_batt_info.charger == SWITCH_CHARGER) 
-//			set_charger_ctrl(arg);
+		else if(htc_batt_info.charger == SWITCH_CHARGER) 
+			set_charger_ctrl(arg);
 		break;
 	case DS2784_LEVEL_UPDATE:
 		htc_battery_status_update(arg);
@@ -1582,10 +1579,10 @@ static int htc_battery_probe(struct platform_device *pdev)
 	if (pdata->guage_driver == GUAGE_MODEM ||
 		pdata->m2a_cable_detect)
 		msm_rpc_create_server(&battery_server);
-#if defined(CONFIG_BATTERY_DS2784)
+#ifdef CONFIG_BATTERY_DS2784
 	if (pdata->guage_driver == GUAGE_DS2784)
 		ds2784_register_notifier(&ds2784_notifier);
-#elif defined(CONFIG_BATTERY_DS2746)
+#elif CONFIG_BATTERY_DS2746
 	if (pdata->guage_driver == GUAGE_DS2746)
 		ds2746_register_notifier(&ds2784_notifier);
 #endif
@@ -1633,12 +1630,12 @@ static int __init htc_battery_init(void)
 	wake_lock_init(&vbus_wake_lock, WAKE_LOCK_SUSPEND, "vbus_present");
 	mutex_init(&htc_batt_info.lock);
 	mutex_init(&htc_batt_info.rpc_lock);
-//XXX	usb_register_notifier(&usb_status_notifier);
+	usb_register_notifier(&usb_status_notifier);
 	platform_driver_register(&htc_battery_driver);
 	platform_driver_register(&htc_battery_core_driver);
 	batt_register_client(&batt_notify);
 	/* Jay, The msm_fb need to consult htc_battery for power policy */
-//XXX	display_notifier(htc_power_policy, NOTIFY_POWER);
+	display_notifier(htc_power_policy, NOTIFY_POWER);
 	return 0;
 }
 

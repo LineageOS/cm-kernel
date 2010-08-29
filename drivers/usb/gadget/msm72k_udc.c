@@ -202,6 +202,44 @@ static int msm72k_pullup(struct usb_gadget *_gadget, int is_active);
 static int msm72k_set_halt(struct usb_ep *_ep, int value);
 static void flush_endpoint(struct msm_endpoint *ept);
 
+static DEFINE_MUTEX(notify_sem);
+static void send_usb_connect_notify(struct work_struct *w)
+{
+	static struct t_usb_status_notifier *notifier;
+	struct usb_info *ui = container_of(w, struct usb_info,
+		work);
+	if (!ui)
+		return;
+
+	printk(KERN_INFO "usb: send connect type %d\n", ui->connect_type);
+	mutex_lock(&notify_sem);
+	list_for_each_entry(notifier,
+		&g_lh_usb_notifier_list,
+		notifier_link) {
+			if (notifier->func != NULL) {
+				/* Notify other drivers about connect type. */
+				/* use slow charging for unknown type*/
+				if (ui->connect_type == CONNECT_TYPE_UNKNOWN)
+					notifier->func(CONNECT_TYPE_USB);
+				else
+					notifier->func(ui->connect_type);
+			}
+		}
+	mutex_unlock(&notify_sem);
+}
+
+int usb_register_notifier(struct t_usb_status_notifier *notifier)
+{
+	if (!notifier || !notifier->name || !notifier->func)
+		return -EINVAL;
+
+	mutex_lock(&notify_sem);
+	list_add(&notifier->notifier_link,
+		&g_lh_usb_notifier_list);
+	mutex_unlock(&notify_sem);
+	return 0;
+}
+
 static int usb_ep_get_stall(struct msm_endpoint *ept)
 {
 	unsigned int n;
