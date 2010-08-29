@@ -947,7 +947,7 @@ dhd_preinit_ioctls(dhd_pub_t *dhd)
 
 	if(!wifi_get_dot11n_enable()) {
 		/* Disable nmode as default */
-		bcm_mkiovar("nmode", (char *)&nmode, 4, iovbuf, sizeof(iovbuf));
+		bcm_mkiovar("-----", (char *)&nmode, 4, iovbuf, sizeof(iovbuf));
 		dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 		myprintf("wifi: Disable 802.11n\n");
 	}
