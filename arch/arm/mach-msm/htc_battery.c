@@ -39,7 +39,7 @@
 #endif
 #ifdef CONFIG_BATTERY_DS2784
 #include <linux/ds2784_battery.h>
-#elif CONFIG_BATTERY_DS2746
+#elif defined(CONFIG_BATTERY_DS2746)
 #include <linux/ds2746_battery.h>
 #endif
 
