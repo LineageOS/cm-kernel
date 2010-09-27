@@ -22,6 +22,11 @@
 #include <linux/init.h>
 #include "acpuclock.h"
 
+/* Make sure the cpu is not overclocked by default to avoid potential freezing/boot loops
+ * for people with less capable hardware. */
+#define CPUFREQ_MAX 998400
+#define CPUFREQ_MIN 245760
+
 #ifdef CONFIG_MSM_CPU_FREQ_SCREEN
 static void msm_early_suspend(struct early_suspend *handler) {
 	acpuclk_set_rate(CONFIG_MSM_CPU_FREQ_SCREEN_OFF * 1000, 0);
@@ -90,6 +95,10 @@ static int __init msm_cpufreq_init(struct cpufreq_policy *policy)
 
 	BUG_ON(cpufreq_frequency_table_cpuinfo(policy, table));
 	policy->cur = acpuclk_get_rate();
+	// safety speed range
+	policy->max = CPUFREQ_MAX;
+	policy->min = CPUFREQ_MIN;
+	// end safety speed range
 	policy->cpuinfo.transition_latency =
 		acpuclk_get_switch_time() * NSEC_PER_USEC;
 	return 0;
