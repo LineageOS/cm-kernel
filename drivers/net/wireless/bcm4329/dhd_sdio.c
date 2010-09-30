@@ -5829,6 +5829,8 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 
 		if (bus->dhd->dongle_reset) {
 			/* Turn on WLAN */
+			dhd_os_sdlock(dhdp);
+
 			/* Reset SD client */
 			bcmsdh_reset(bus->sdh);
 
@@ -5860,6 +5862,7 @@ dhd_bus_devreset(dhd_pub_t *dhdp, uint8 flag)
 					bcmerror = BCME_SDIO_ERROR;
 			} else
 				bcmerror = BCME_SDIO_ERROR;
+			dhd_os_sdunlock(dhdp);
 		} else {
 			bcmerror = BCME_NOTDOWN;
 			DHD_ERROR(("%s: Set DEVRESET=FALSE invoked when device is on\n",
