@@ -1288,13 +1288,33 @@ static struct platform_device supersonic_flashlight_device = {
 	},
 };
 
+static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
+        .rx_wakeup_irq = -1,
+        .inject_rx_on_wakeup = 0,
+        .exit_lpm_cb = bcm_bt_lpm_exit_lpm_locked,
+};
+
+static struct bcm_bt_lpm_platform_data bcm_bt_lpm_pdata = {
+        .gpio_wake = SUPERSONIC_GPIO_BT_CHIP_WAKE,
+        .gpio_host_wake = SUPERSONIC_GPIO_BT_HOST_WAKE,
+        .request_clock_off_locked = msm_hs_request_clock_off_locked,
+        .request_clock_on_locked = msm_hs_request_clock_on_locked,
+};
+
+struct platform_device bcm_bt_lpm_device = {
+        .name = "bcm_bt_lpm",
+        .id = 0,
+        .dev = {
+                .platform_data = &bcm_bt_lpm_pdata,
+        },
+};
+
 static struct platform_device *devices[] __initdata = {
 #ifndef CONFIG_MSM_SERIAL_DEBUGGER
 	&msm_device_uart1,
 #endif
-#ifdef CONFIG_SERIAL_MSM_HS
+	&bcm_bt_lpm_device,
 	&msm_device_uart_dm1,
-#endif
 	&htc_battery_pdev,
 	&htc_headset_mgr,
 	&htc_headset_gpio,
@@ -1364,21 +1384,6 @@ static struct msm_acpu_clock_platform_data supersonic_clock_data = {
 };
 
 int supersonic_init_mmc(int sysrev);
-
-#ifdef CONFIG_SERIAL_MSM_HS
-
-static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
-	.rx_wakeup_irq = MSM_GPIO_TO_INT(SUPERSONIC_GPIO_BT_HOST_WAKE),	/*Chip to Device*/
-	.inject_rx_on_wakeup = 0,
-
-	/* for bcm */
-	.bt_wakeup_pin_supported = 1,
-	.bt_wakeup_pin = SUPERSONIC_GPIO_BT_CHIP_WAKE,
-	.host_wakeup_pin = SUPERSONIC_GPIO_BT_HOST_WAKE,
-};
-
-#endif
-
 
 static int OJ_BMA_power(void)
 {
@@ -1472,10 +1477,7 @@ static void __init supersonic_init(void)
 	msm_device_spi.dev.platform_data = &supersonic_spi_pdata;
 #endif
 
-#ifdef CONFIG_SERIAL_MSM_HS
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
-	msm_device_uart_dm1.name = "msm_serial_hs_bcm";	/* for bcm */
-#endif
 
 	config_gpio_table(usb_phy_3v3_table, ARRAY_SIZE(usb_phy_3v3_table));
 	config_gpio_table(camera_off_gpio_table,
