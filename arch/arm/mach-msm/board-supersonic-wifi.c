@@ -77,7 +77,7 @@ static struct resource supersonic_wifi_resources[] = {
 		.name		= "bcm4329_wlan_irq",
 		.start		= MSM_GPIO_TO_INT(SUPERSONIC_GPIO_WIFI_IRQ),
 		.end		= MSM_GPIO_TO_INT(SUPERSONIC_GPIO_WIFI_IRQ),
-		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL,
+		.flags          = IORESOURCE_IRQ | IORESOURCE_IRQ_HIGHLEVEL | IORESOURCE_IRQ_SHAREABLE,
 	},
 };
 
@@ -100,7 +100,7 @@ static struct platform_device supersonic_wifi_device = {
 
 extern unsigned char *get_wifi_nvs_ram(void);
 
-static unsigned supersonic_wifi_update_nvs(char *str)
+static unsigned supersonic_wifi_update_nvs(char *str, int add_flag)
 {
 #define NVS_LEN_OFFSET		0x0C
 #define NVS_DATA_OFFSET		0x40
@@ -114,9 +114,13 @@ static unsigned supersonic_wifi_update_nvs(char *str)
 	memcpy(&len, ptr + NVS_LEN_OFFSET, sizeof(len));
 
 	/* the last bye in NVRAM is 0, trim it */
-	if (ptr[NVS_DATA_OFFSET + len -1] == 0)
-		len -= 1;
-
+	if (add_flag) {
+		strcpy(ptr + NVS_DATA_OFFSET + len, str);
+		len += strlen(str);
+	} else {
+		if (strnstr(ptr + NVS_DATA_OFFSET, str, len))
+			len -= strlen(str);
+	}
 	strcpy(ptr + NVS_DATA_OFFSET + len, str);
 	len += strlen(str);
 	memcpy(ptr + NVS_LEN_OFFSET, &len, sizeof(len));
@@ -131,7 +135,8 @@ static int __init supersonic_wifi_init(void)
 		return 0;
 
 	printk("%s: start\n", __func__);
-	supersonic_wifi_update_nvs("sd_oobonly=1\r\n");
+	supersonic_wifi_update_nvs("sd_oobonly=1\r\n", 0);
+	supersonic_wifi_update_nvs("btc_params70=0x32\r\n", 1);
 	supersonic_init_wifi_mem();
 	ret = platform_device_register(&supersonic_wifi_device);
         return ret;
