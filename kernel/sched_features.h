@@ -10,7 +10,6 @@ SCHED_FEAT(FAIR_SLEEPERS, 1)
  * them to run sooner, but does not allow tons of sleepers to
  * rip the spread apart.
  */
-SCHED_FEAT(FAIR_SLEEPERS, 1)
 SCHED_FEAT(GENTLE_FAIR_SLEEPERS, 1)
 
 /*
@@ -115,7 +114,7 @@ SCHED_FEAT(ASYM_EFF_LOAD, 1)
  * Push the min_vruntime spread floor value when descheduling a task. This
  * ensures the spread does not grow beyond control.
  */
-SCHED_FEAT(DYN_MIN_VRUNTIME, 0)
+SCHED_FEAT(DYN_MIN_VRUNTIME, 1)
 
 /*
  * Spin-wait on mutex acquisition when the mutex owner is running on
