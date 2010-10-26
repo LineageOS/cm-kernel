@@ -289,18 +289,40 @@ static struct platform_device supersonic_leds = {
 	},
 };
 
-extern void msm_hsusb_8x50_phy_reset(void);
 static int supersonic_phy_init_seq[] = { 0xC, 0x31, 0x30, 0x32, 0x1D, 0x0D, 0x1D, 0x10, -1 };
+
+
+// USB cable out: supersonic_uart_usb_switch(1)
+// USB cable in: supersonic_uart_usb_switch(0)
+static void supersonic_uart_usb_switch(int uart)
+{
+        printk(KERN_INFO "%s:uart:%d\n", __func__, uart);
+        gpio_set_value(SUPERSONIC_USB_UARTz_SW, uart?1:0); // XA and for USB cable in to reset wimax UART
+
+        if(system_rev && uart) // XB
+        {
+                if (gpio_get_value(SUPERSONIC_WIMAX_CPU_UARTz_SW))  // Wimax UART
+            {
+                        printk(KERN_INFO "%s:Wimax UART\n", __func__);
+                        gpio_set_value(SUPERSONIC_USB_UARTz_SW,1);
+                        gpio_set_value(SUPERSONIC_WIMAX_CPU_UARTz_SW,1);
+                }
+                else // USB, CPU UART
+                {
+                        printk(KERN_INFO "%s:Non wimax UART\n", __func__);
+                        gpio_set_value(SUPERSONIC_WIMAX_CPU_UARTz_SW, uart==2?1:0);
+                }
+        }
+}
+
+extern void msm_hsusb_8x50_phy_reset(void);
 
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.phy_init_seq = supersonic_phy_init_seq,
-	.usb_connected = notify_usb_connected,
-#if 0
-	// HTC 2.6.32
+	.phy_reset = msm_hsusb_8x50_phy_reset,
 	.usb_id_pin_gpio =  SUPERSONIC_GPIO_USB_ID_PIN,
 	.accessory_detect = 1, /* detect by ID pin gpio */
 	.usb_uart_switch = supersonic_uart_usb_switch,
-#endif
 };
 
 
@@ -438,29 +460,6 @@ XB : GPIO33 = 0 -> USB
     GPIO33 = 1 , GPIO160 = 1 -> Wimax UART   // SUPERSONIC_USB_UARTz_SW (GPIO33)
 */
 
-
-// USB cable out: supersonic_uart_usb_switch(1)
-// USB cable in: supersonic_uart_usb_switch(0)
-static void supersonic_uart_usb_switch(int uart)
-{
-	printk(KERN_INFO "%s:uart:%d\n", __func__, uart); 
-	gpio_set_value(SUPERSONIC_USB_UARTz_SW, uart?1:0); // XA and for USB cable in to reset wimax UART
-
-	if(system_rev && uart) // XB
-	{		
-		if (gpio_get_value(SUPERSONIC_WIMAX_CPU_UARTz_SW))  // Wimax UART
-	    {
-			printk(KERN_INFO "%s:Wimax UART\n", __func__);
-			gpio_set_value(SUPERSONIC_USB_UARTz_SW,1);
-			gpio_set_value(SUPERSONIC_WIMAX_CPU_UARTz_SW,1);
-		}		
-		else // USB, CPU UART
-		{
-			printk(KERN_INFO "%s:Non wimax UART\n", __func__);
-			gpio_set_value(SUPERSONIC_WIMAX_CPU_UARTz_SW, uart==2?1:0);
-		}
-	}
-}
 
 static int __init board_serialno_setup(char *serialno)
 {

@@ -222,6 +222,18 @@ struct ept_queue_item {
 #define OTGSC_INTR_STS_MASK    (0x7f << 16)
 #define CURRENT_CONNECT_STATUS (1 << 0)
 
+#define PORTSC_FPR             (1 << 6)  /* R/W - State normal => suspend */
+#define PORTSC_SUSP            (1 << 7)  /* Read - Port in suspend state */
+#define PORTSC_LS              (3 << 10) /* Read - Port's Line status */
+#define PORTSC_PHCD            (1 << 23) /* phy suspend mode */
+#define PORTSC_CCS             (1 << 0)  /* current connect status */
+#define PORTSC_PTS              (3 << 30)
+#define PORTSC_PTS_ULPI         (2 << 30)
+#define PORTSC_PTS_SERIAL       (3 << 30)
+/* suspend and remote wakeup */
+#define PORTSC_FPR             (1 << 6)
+#define PORTSC_SUSP            (1 << 7)
+
 /* test mode support */
 #define J_TEST			(0x0100)
 #define K_TEST			(0x0200)
@@ -243,5 +255,8 @@ struct ept_queue_item {
 #define PORTSC_PORT_RESET      (1 << 8)
 #define PORTSC_LS              (3 << 10) /* Read - Port's Line status */
 #define PORTSC_PHCD            (1 << 23) /* phy suspend mode */
+
+#define ULPI_DEBUG               0x15
+#define ULPI_SUSPENDM            (1 << 6)
 
 #endif /* __LINUX_USB_GADGET_MSM72K_UDC_H__ */
