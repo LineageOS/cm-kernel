@@ -1068,6 +1068,11 @@ static struct i2c_board_info i2c_devices[] = {
 	{
 		I2C_BOARD_INFO("ov8810", 0x6C >> 1),
 	},
+#ifdef CONFIG_S5K3H1GX
+	{
+		I2C_BOARD_INFO("s5k3h1gx", 0x20 >> 1),
+	},
+#endif
 	{
 		I2C_BOARD_INFO("ov9665", 0x60 >> 1),
 	},
@@ -1106,46 +1111,59 @@ module_param_string(bdaddress, bdaddress, sizeof(bdaddress), S_IWUSR | S_IRUGO);
 MODULE_PARM_DESC(bdaddress, "BT MAC ADDRESS");
 #endif
 
+static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
+#ifdef CONFIG_OV8810
+        {
+                I2C_BOARD_INFO("ov8810", 0x6C >> 1),
+        },
+#endif
+#ifdef CONFIG_S5K3H1GX
+        {
+                I2C_BOARD_INFO("s5k3h1gx", 0x20 >> 1),
+        },
+#endif
+};
+
 static uint32_t camera_off_gpio_table[] = {
-	/* CAMERA SUSPEND*/
-	PCOM_GPIO_CFG(0, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT0 */
-	PCOM_GPIO_CFG(1, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT1 */
-	PCOM_GPIO_CFG(2, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT2 */
-	PCOM_GPIO_CFG(3, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT3 */
-	PCOM_GPIO_CFG(4, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT4 */
-	PCOM_GPIO_CFG(5, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT5 */
-	PCOM_GPIO_CFG(6, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT6 */
-	PCOM_GPIO_CFG(7, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT7 */
-	PCOM_GPIO_CFG(8, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT8 */
-	PCOM_GPIO_CFG(9, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT9 */
-	PCOM_GPIO_CFG(10, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT10 */
-	PCOM_GPIO_CFG(11, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* DAT11 */
-	PCOM_GPIO_CFG(12, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* PCLK */
-	PCOM_GPIO_CFG(13, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* HSYNC */
-	PCOM_GPIO_CFG(14, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* VSYNC */
-	PCOM_GPIO_CFG(15, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_4MA), /* MCLK */
-	PCOM_GPIO_CFG(99, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), /* CAM1_RST */
-	PCOM_GPIO_CFG(100, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), /* CAM1_PWD */
+        /* parallel CAMERA interfaces */
+        PCOM_GPIO_CFG(SUPERSONIC_MAINCAM_RST,  0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), /* RST */
+        PCOM_GPIO_CFG(SUPERSONIC_MAINCAM_PWD,  0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), /* PWD */
+        PCOM_GPIO_CFG(2,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT2 */
+        PCOM_GPIO_CFG(3,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT3 */
+        PCOM_GPIO_CFG(4,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT4 */
+        PCOM_GPIO_CFG(5,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT5 */
+        PCOM_GPIO_CFG(6,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT6 */
+        PCOM_GPIO_CFG(7,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT7 */
+        PCOM_GPIO_CFG(8,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT8 */
+        PCOM_GPIO_CFG(9,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT9 */
+        PCOM_GPIO_CFG(10, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT10 */
+        PCOM_GPIO_CFG(11, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* DAT11 */
+        PCOM_GPIO_CFG(12, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* PCLK */
+        PCOM_GPIO_CFG(13, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* HSYNC_IN */
+        PCOM_GPIO_CFG(14, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_4MA), /* VSYNC_IN */
+        PCOM_GPIO_CFG(15, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), /* MCLK */
+
 };
 
 static uint32_t camera_on_gpio_table[] = {
-	/* CAMERA */
-	PCOM_GPIO_CFG(0, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT0 */
-	PCOM_GPIO_CFG(1, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT1 */
-	PCOM_GPIO_CFG(2, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT2 */
-	PCOM_GPIO_CFG(3, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT3 */
-	PCOM_GPIO_CFG(4, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT4 */
-	PCOM_GPIO_CFG(5, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT5 */
-	PCOM_GPIO_CFG(6, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT6 */
-	PCOM_GPIO_CFG(7, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT7 */
-	PCOM_GPIO_CFG(8, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT8 */
-	PCOM_GPIO_CFG(9, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT9 */
-	PCOM_GPIO_CFG(10, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT10 */
-	PCOM_GPIO_CFG(11, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* DAT11 */
-	PCOM_GPIO_CFG(12, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_16MA), /* PCLK */
-	PCOM_GPIO_CFG(13, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* HSYNC */
-	PCOM_GPIO_CFG(14, 1, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), /* VSYNC */
-	PCOM_GPIO_CFG(15, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), /* MCLK */
+        /* parallel CAMERA interfaces */
+        PCOM_GPIO_CFG(SUPERSONIC_MAINCAM_RST,   0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), /* RST */
+        PCOM_GPIO_CFG(SUPERSONIC_MAINCAM_PWD,   0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), /* PWD */
+        PCOM_GPIO_CFG(2,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT2 */
+        PCOM_GPIO_CFG(3,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT3 */
+        PCOM_GPIO_CFG(4,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT4 */
+        PCOM_GPIO_CFG(5,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT5 */
+        PCOM_GPIO_CFG(6,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT6 */
+        PCOM_GPIO_CFG(7,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT7 */
+        PCOM_GPIO_CFG(8,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT8 */
+        PCOM_GPIO_CFG(9,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT9 */
+        PCOM_GPIO_CFG(10, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT10 */
+        PCOM_GPIO_CFG(11, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT11 */
+        PCOM_GPIO_CFG(12, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* PCLK */
+        PCOM_GPIO_CFG(13, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* HSYNC_IN */
+        PCOM_GPIO_CFG(14, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* VSYNC_IN */
+        PCOM_GPIO_CFG(15, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), /* MCLK */
+
 };
 
 static void config_camera_on_gpios(void)
@@ -1160,6 +1178,15 @@ static void config_camera_off_gpios(void)
 		ARRAY_SIZE(camera_off_gpio_table));
 }
 
+static int camera_main_probed = 0;
+static int supersonic_camera_main_get_probe(void)
+{
+        return camera_main_probed;
+}
+static void supersonic_camera_main_set_probe(int probed)
+{
+        camera_main_probed = probed;
+}
 
 static struct resource msm_camera_resources[] = {
 	{
@@ -1181,6 +1208,8 @@ static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.ioext.mdcsz  = MSM_MDC_SIZE,
 	.ioext.appphy = MSM_CLK_CTL_PHYS,
 	.ioext.appsz  = MSM_CLK_CTL_SIZE,
+        .ioext.camifpadphy = 0xAB000000,
+        .ioext.camifpadsz  = 0x00000400
 };
 
 static void supersonic_ov8810_clk_switch(void){
@@ -1194,6 +1223,19 @@ static void supersonic_ov8810_clk_switch(void){
 	gpio_free(SUPERSONIC_CLK_SWITCH);
 
 	return;
+}
+
+static void supersonic_s5k3h1gx_clk_switch(void){
+        int rc = 0;
+        pr_info("SuperSoinc: clk switch (supersonic)(s5k3h1gx)\n");
+        rc = gpio_request(SUPERSONIC_CLK_SWITCH, "s5k3h1gx");
+        if (rc < 0)
+                pr_err("GPIO (%d) request fail\n", SUPERSONIC_CLK_SWITCH);
+        else
+                gpio_direction_output(SUPERSONIC_CLK_SWITCH, 0);
+        gpio_free(SUPERSONIC_CLK_SWITCH);
+
+        return;
 }
 
 static void supersonic_ov9665_clk_switch(void){
@@ -1220,13 +1262,15 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov8810_data = {
 	.sensor_name    = "ov8810",
 	.sensor_reset   = SUPERSONIC_MAINCAM_RST, /* CAM1_RST */
 	.sensor_pwd     = SUPERSONIC_MAINCAM_PWD,  /* CAM1_PWDN, enabled in a9 */
-	.camera_clk_switch	= supersonic_ov8810_clk_switch,
+	.camera_clk_switch = supersonic_ov8810_clk_switch,
+        .camera_main_get_probe = supersonic_camera_main_get_probe,
+        .camera_main_set_probe = supersonic_camera_main_set_probe,
 	.pdata = &msm_camera_device_data,
+        .flash_type = MSM_CAMERA_FLASH_LED,
 	.resource = msm_camera_resources,
 	.num_resources = ARRAY_SIZE(msm_camera_resources),
-	.waked_up = 0,
-	.need_suspend = 0,
 	.flash_cfg	= &msm_camera_sensor_flash_cfg,
+        .sensor_lc_disable = true, /* disable sensor lens correction */
 };
 
 static struct platform_device msm_camera_sensor_ov8810 = {
@@ -1235,6 +1279,30 @@ static struct platform_device msm_camera_sensor_ov8810 = {
     .platform_data = &msm_camera_sensor_ov8810_data,
     },
 };
+
+#ifdef CONFIG_S5K3H1GX
+static struct msm_camera_sensor_info msm_camera_sensor_s5k3h1gx_data = {
+        .sensor_name = "s5k3h1gx",
+        .vcm_pwd = SUPERSONIC_MAINCAM_RST,
+        .sensor_pwd = SUPERSONIC_MAINCAM_PWD,
+	.camera_clk_switch = supersonic_s5k3h1gx_clk_switch,
+        .camera_main_get_probe = supersonic_camera_main_get_probe,
+        .camera_main_set_probe = supersonic_camera_main_set_probe,
+        .pdata = &msm_camera_device_data,
+        .flash_type = MSM_CAMERA_FLASH_LED,
+        .resource = msm_camera_resources,
+        .num_resources = ARRAY_SIZE(msm_camera_resources),
+        .flash_cfg = &msm_camera_sensor_flash_cfg,
+        .csi_if = 0,
+};
+
+static struct platform_device msm_camera_sensor_s5k3h1gx = {
+  .name = "msm_camera_s5k3h1gx",
+  .dev = {
+    .platform_data = &msm_camera_sensor_s5k3h1gx_data,
+  },
+};
+#endif
 
 static struct msm_camera_sensor_info msm_camera_sensor_ov9665_data = {
 	.sensor_name	= "ov9665",
@@ -1338,6 +1406,9 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_ciq3_device,
 #endif
 	&msm_camera_sensor_ov8810,
+#ifdef CONFIG_S5K3H1GX
+        &msm_camera_sensor_s5k3h1gx,
+#endif
 	&msm_kgsl_device,
 	&msm_device_i2c,
 	&msm_camera_sensor_ov9665,
@@ -1498,6 +1569,9 @@ static void __init supersonic_init(void)
 	ret = supersonic_init_mmc(system_rev);
 	if (ret != 0)
 		pr_crit("%s: Unable to initialize MMC\n", __func__);
+
+        i2c_register_board_info(4 /* QUP ID */, msm_camera_boardinfo,
+                                ARRAY_SIZE(msm_camera_boardinfo));
 
 	properties_kobj = kobject_create_and_add("board_properties", NULL);
 	if (properties_kobj)
