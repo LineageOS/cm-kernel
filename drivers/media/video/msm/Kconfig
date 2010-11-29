@@ -71,3 +71,11 @@ config OV9665
 	default n
 	---help---
 	  OmniVision 3M YUV Sensor
+
+config S5K3H1GX
+        bool "Sensor s5k3h1gx"
+        depends on MSM_CAMERA
+        default n
+        ---help---
+          Samsung 8M 3H1 MIPI AF Sensor
+

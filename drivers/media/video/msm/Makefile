@@ -8,3 +8,5 @@ obj-$(CONFIG_S5K3E2FX) += s5k3e2fx.o
 obj-$(CONFIG_ARCH_MSM_ARM11) += msm_vfe7x.o msm_io7x.o
 obj-$(CONFIG_ARCH_QSD8X50) += msm_vfe8x.o msm_vfe8x_proc.o msm_io8x.o
 obj-$(CONFIG_OV8810) += ov8810.o
+obj-$(CONFIG_S5K3H1GX) += s5k3h1gx.o s5k3h1gx_reg.o
+
