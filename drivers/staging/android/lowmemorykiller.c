@@ -35,8 +35,6 @@
 #include <linux/oom.h>
 #include <linux/sched.h>
 #include <linux/notifier.h>
-#include <linux/fs.h>
-#include <linux/swap.h>
 
 static uint32_t lowmem_debug_level = 2;
 static int lowmem_adj[6] = {
@@ -53,6 +51,22 @@ static size_t lowmem_minfree[6] = {
 	16 * 1024,	/* 64MB */
 };
 static int lowmem_minfree_size = 4;
+
+static size_t lowmem_minfile[6] = {
+	1536,
+	2048,
+	4096,
+	5120,
+	5632,
+	6144
+};
+static int lowmem_minfile_size = 6;
+
+#ifdef CONFIG_SWAP
+static uint32_t lowmem_check_filepages = 1;
+#else
+static uint32_t lowmem_check_filepages = 0;
+#endif
 
 static struct task_struct *lowmem_deathpending;
 
@@ -99,10 +113,10 @@ static int lowmem_shrink(struct shrinker *s, int nr_to_scan, gfp_t gfp_mask)
 	int selected_tasksize = 0;
 	int selected_oom_adj;
 	int array_size = ARRAY_SIZE(lowmem_adj);
-	int other_file = global_page_state(NR_ACTIVE_FILE) + global_page_state(NR_INACTIVE_FILE);
-#ifdef CONFIG_SWAP
-	other_file += (int)total_swapcache_pages; /* add swapcache to other_file */
-#endif
+	int other_free = global_page_state(NR_FREE_PAGES);
+	int other_file = global_page_state(NR_FILE_PAGES);
+	int lru_file = global_page_state(NR_ACTIVE_FILE) +
+			global_page_state(NR_INACTIVE_FILE);
 
 	/*
 	 * If we already have a death outstanding, then
@@ -119,14 +133,18 @@ static int lowmem_shrink(struct shrinker *s, int nr_to_scan, gfp_t gfp_mask)
 	if (lowmem_minfree_size < array_size)
 		array_size = lowmem_minfree_size;
 	for (i = 0; i < array_size; i++) {
-		if (other_file < lowmem_minfree[i]) {
-			min_adj = lowmem_adj[i];
-			break;
+		if (other_free < lowmem_minfree[i]) {
+			if (other_file < lowmem_minfree[i] ||
+					(lowmem_check_filepages &&
+					(lru_file < lowmem_minfile[i]))) {
+				min_adj = lowmem_adj[i];
+				break;
+			}
 		}
 	}
 	if (nr_to_scan > 0)
-		lowmem_print(3, "lowmem_shrink %d, %x, ofree %d, ma %d\n",
-			     nr_to_scan, gfp_mask, other_file,
+		lowmem_print(3, "lowmem_shrink %d, %x, ofree %d %d, ma %d\n",
+			     nr_to_scan, gfp_mask, other_free, other_file,
 			     min_adj);
 	rem = global_page_state(NR_ACTIVE_ANON) +
 		global_page_state(NR_ACTIVE_FILE) +
@@ -211,6 +229,11 @@ module_param_array_named(adj, lowmem_adj, int, &lowmem_adj_size,
 module_param_array_named(minfree, lowmem_minfree, uint, &lowmem_minfree_size,
 			 S_IRUGO | S_IWUSR);
 module_param_named(debug_level, lowmem_debug_level, uint, S_IRUGO | S_IWUSR);
+
+module_param_named(check_filepages , lowmem_check_filepages, uint,
+			 S_IRUGO | S_IWUSR);
+module_param_array_named(minfile, lowmem_minfile, uint, &lowmem_minfile_size,
+			 S_IRUGO | S_IWUSR);
 
 module_init(lowmem_init);
 module_exit(lowmem_exit);
