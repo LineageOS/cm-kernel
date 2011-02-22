@@ -1516,21 +1516,12 @@ void mmc_rescan(struct work_struct *work)
 	if (host->ops->get_cd && host->ops->get_cd(host) == 0)
 		goto out;
 
-	for (i = 0; i < ARRAY_SIZE(freqs); i++) {
 		mmc_claim_host(host);
 
-		if (freqs[i] >= host->f_min)
-			host->f_init = freqs[i];
-		else if (!i || freqs[i-1] > host->f_min)
-			host->f_init = host->f_min;
-		else {
-			mmc_release_host(host);
-			goto out;
-		}
-#ifdef CONFIG_MMC_DEBUG
+		host->f_init = host->f_min;
+
 		pr_info("%s: %s: trying to init card at %u Hz\n",
 			mmc_hostname(host), __func__, host->f_init);
-#endif
 		mmc_power_up(host);
 		sdio_reset(host);
 		mmc_go_idle(host);
@@ -1583,7 +1574,7 @@ void mmc_rescan(struct work_struct *work)
 out_fail:
 		mmc_release_host(host);
 		mmc_power_off(host);
-	}
+
 out:
 	if (extend_wakelock)
 		wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ / 2);
