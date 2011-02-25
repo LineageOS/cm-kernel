@@ -52,6 +52,9 @@ static int sapphire_rfkill_probe(struct platform_device *pdev)
 	int rc = 0;
 	bool default_state = true;  /* off */
 
+	rc = gpio_request(SAPPHIRE_GPIO_BT_32K_EN, "rfkill");
+	rc = gpio_request(101, "rfkill");
+
 	bluetooth_set_power(NULL, default_state);
 
 	bt_rfk = rfkill_alloc(bt_name, &pdev->dev, RFKILL_TYPE_BLUETOOTH,
@@ -74,6 +77,9 @@ static int sapphire_rfkill_remove(struct platform_device *dev)
 {
 	rfkill_unregister(bt_rfk);
 	rfkill_destroy(bt_rfk);
+
+	gpio_free(SAPPHIRE_GPIO_BT_32K_EN);
+	gpio_free(101);
 
 	return 0;
 }
