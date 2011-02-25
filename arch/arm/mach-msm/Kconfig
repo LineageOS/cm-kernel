@@ -123,6 +123,17 @@ endchoice
 
 menu "Qualcomm MSM Board Type"
 
+config HOLES_IN_ZONE
+        depends on ARCH_MSM7X00A || ARCH_QSD8X50
+        bool "Support for non-aligned zones"
+        default n
+        help
+         Select this to support boards with zones that aren't aligned
+         to MAX_ORDER boundaries (4MB by default).
+
+         Both the start and end of all zones must be aligned without
+         this option.
+
 config MACH_HALIBUT
 	depends on ARCH_MSM
 	depends on ARCH_MSM7X00A
@@ -197,6 +208,10 @@ config MACH_MSM8X60_FFA
 	  Support for the Qualcomm MSM8x60 FFA eval board.
 
 endmenu
+
+config MSM_AMSS_SUPPORT_256MB_EBI1
+        default n
+        bool "AMSS that support unified 128MB and 256MB EBI1"
 
 config MSM_DEBUG_UART
 	int
@@ -291,6 +306,14 @@ config HTC_HEADSET
 	 Provides support for detecting HTC 2 wire devices, such as wired
 	 headset, on the trout platform. Can be used with the msm serial
 	 debugger, but not with serial console.
+
+config HTC_AUDIO_JACK
+	tristate "Audio Jack detection driver"
+	depends on HTC_HEADSET
+	default n
+	help
+	  Provides support for detecting audio jack, such as 3.5mm
+	  earphone, on the android platform.
 
 config HTC_35MM_JACK
 	bool "HTC 3.5mm headset jack"

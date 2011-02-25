@@ -1150,6 +1150,14 @@ static struct platform_driver sapphire_backlight_driver = {
 	},
 };
 
+static struct resource resources_msm_fb_smi32[] = {
+        {
+                .start = SMI32_MSM_FB_BASE,
+                .end = SMI32_MSM_FB_BASE + SMI32_MSM_FB_SIZE - 1,
+                .flags = IORESOURCE_MEM,
+        },
+};
+
 static struct resource resources_msm_fb[] = {
 	{
 		.start = SMI64_MSM_FB_BASE,
@@ -1246,8 +1254,16 @@ int __init sapphire_init_panel(void)
 
 	/* setup FB by SMI size */
 	if (sapphire_get_smi_size() == 32) {
-		resources_msm_fb[0].start = SMI32_MSM_FB_BASE;
-		resources_msm_fb[0].end = SMI32_MSM_FB_BASE + SMI32_MSM_FB_SIZE - 1;
+		switch (sapphire_get_die_size()) {
+		case EBI1_DUAL_128MB_128MB:
+		case EBI1_MONO_256MB:
+			resources_msm_fb[0].start = 0x00700000;
+			resources_msm_fb[0].end = resources_msm_fb[0].start + 0x9b000 - 1;
+			break;
+		default:
+                        mddi_pdata.fb_resource = resources_msm_fb_smi32;
+			break;
+		}
 	}
 
 	rc = gpio_request(VSYNC_GPIO, "vsync");
