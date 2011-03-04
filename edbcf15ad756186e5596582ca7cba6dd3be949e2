@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "AAAACn//+q4\u003d",
+        "filename": "arch/arm/mach-msm/devices-qsd8x50.c",
+        "patchSetId": 3
+      },
+      "lineNbr": 246,
+      "author": {
+        "id": 32
+      },
+      "writtenOn": "2011-03-04T09:26:15Z",
+      "side": 1,
+      "message": "Why are we changing this?",
+      "revId": "edbcf15ad756186e5596582ca7cba6dd3be949e2",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": false
+    }
+  ]
+}
