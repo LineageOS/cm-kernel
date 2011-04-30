@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
-# Linux/arm 2.6.37.4 Kernel Configuration
-# Sun Apr 10 21:05:35 2011
+# Linux/arm 2.6.37.6 Kernel Configuration
+# Sat Apr 30 10:30:59 2011
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -282,6 +282,8 @@ CONFIG_MSM_PROC_COMM=y
 # CONFIG_MACH_BRAVO_NONE is not set
 CONFIG_MACH_BRAVO=y
 # CONFIG_MACH_BRAVOC is not set
+# CONFIG_MACH_INCREDIBLE is not set
+# CONFIG_MACH_INCREDIBLEC is not set
 # CONFIG_MACH_SUPERSONIC is not set
 # CONFIG_MACH_QSD8X50_FFA is not set
 # CONFIG_JESUS_PHONE is not set
@@ -1457,6 +1459,7 @@ CONFIG_USB_ANDROID_MASS_STORAGE=y
 # CONFIG_USB_ANDROID_MTP is not set
 CONFIG_USB_ANDROID_RNDIS=y
 CONFIG_USB_ANDROID_RNDIS_WCEIS=y
+CONFIG_USB_ANDROID_ACCESSORY=y
 # CONFIG_USB_CDC_COMPOSITE is not set
 # CONFIG_USB_G_MULTI is not set
 # CONFIG_USB_G_HID is not set
