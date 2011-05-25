@@ -497,8 +497,10 @@ static int android_probe(struct platform_device *pdev)
 		if (pdata->manufacturer_name)
 			strings_dev[STRING_MANUFACTURER_IDX].s =
 					pdata->manufacturer_name;
-		if (pdata->serial_number)
+		if (pdata->serial_number) {
+			printk(KERN_INFO " USB setting serial number to %s", pdata->serial_number);
 			strings_dev[STRING_SERIAL_IDX].s = pdata->serial_number;
+		}
 	}
 
 	return usb_composite_probe(&android_usb_driver, android_bind);

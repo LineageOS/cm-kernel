@@ -948,7 +948,7 @@ static int __init parse_tag_bdaddr(const struct tag *tag)
 
 __tagtable(ATAG_BDADDR, parse_tag_bdaddr);
 
-static int __init board_serialno_setup(char *serialno)
+static int __init serialno_setup(char *serialno)
 {
 #ifdef CONFIG_USB_ANDROID_RNDIS
 	int i;
@@ -967,7 +967,6 @@ static int __init board_serialno_setup(char *serialno)
 	android_usb_pdata.serial_number = serialno;
 	return 1;
 }
-__setup("androidboot.serialno=", board_serialno_setup);
 
 static struct msm_acpu_clock_platform_data mahimahi_clock_data = {
 	.acpu_switch_time_us	= 20,
@@ -1158,6 +1157,8 @@ static void __init mahimahi_init(void)
 		msm_init_pmic_vibrator();
 
 	ds2784_battery_init();
+
+	serialno_setup(board_serialno());
 }
 
 static void __init mahimahi_fixup(struct machine_desc *desc, struct tag *tags,

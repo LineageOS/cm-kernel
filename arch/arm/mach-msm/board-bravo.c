@@ -1109,7 +1109,7 @@ static int __init parse_tag_bdaddr(const struct tag *tag)
 
 __tagtable(ATAG_BDADDR, parse_tag_bdaddr);
 
-static int __init board_serialno_setup(char *serialno)
+static int __init serialno_setup(char *serialno)
 {
 #ifdef CONFIG_USB_ANDROID_RNDIS
 	int i;
@@ -1128,7 +1128,6 @@ static int __init board_serialno_setup(char *serialno)
 	android_usb_pdata.serial_number = serialno;
 	return 1;
 }
-__setup("androidboot.serialno=", board_serialno_setup);
 
 static struct msm_acpu_clock_platform_data bravo_clock_data = {
 	.acpu_switch_time_us	= 20,
@@ -1250,6 +1249,8 @@ static void __init bravo_init(void)
 	platform_device_register(&bravo_timed_gpios);
 
 	ds2784_battery_init();
+
+	serialno_setup(board_serialno());
 }
 
 static void __init bravo_fixup(struct machine_desc *desc, struct tag *tags,

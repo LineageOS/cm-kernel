@@ -2603,7 +2603,7 @@ static int msm72k_probe(struct platform_device *pdev)
 	int irq;
 	int ret;
 
-	INFO("msm72k_probe\n");
+	INFO("msm72k_htc_probe\n");
 	ui = kzalloc(sizeof(struct usb_info), GFP_KERNEL);
 	if (!ui)
 		return -ENOMEM;
@@ -2658,7 +2658,7 @@ static int msm72k_probe(struct platform_device *pdev)
 	if (!ui->pool)
 		return usb_free(ui, -ENOMEM);
 
-	INFO("msm72k_probe() io=%p, irq=%d, dma=%p(%x)\n",
+	INFO("msm72k_htc_probe() io=%p, irq=%d, dma=%p(%x)\n",
 	       ui->addr, irq, ui->buf, ui->dma);
 
 #ifdef CONFIG_ARCH_MSM7X30
@@ -2786,7 +2786,7 @@ int usb_gadget_probe_driver(struct usb_gadget_driver *driver, int (*bind)(struct
 	if (retval != 0)
 		INFO("failed to create sysfs entry: (wakeup) error: (%d)\n",
 					retval);
-	INFO("msm72k_udc: registered gadget driver '%s'\n",
+	INFO("msm72k_udc_htc: registered gadget driver '%s'\n",
 			driver->driver.name);
 	usb_start(ui);
 
