@@ -22,6 +22,8 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/usb/android_composite.h>
+#include <linux/usb/f_accessory.h>
+
 #include <linux/android_pmem.h>
 #include <linux/input.h>
 #include <linux/akm8973.h>
@@ -350,6 +352,11 @@ static char *usb_functions_rndis_adb[] = {
 	"adb",
 };
 
+#ifdef CONFIG_USB_ANDROID_ACCESSORY
+static char *usb_functions_accessory[] = { "accessory" };
+static char *usb_functions_accessory_adb[] = { "accessory", "adb" };
+#endif
+
 #ifdef CONFIG_USB_ANDROID_DIAG
 static char *usb_functions_adb_diag[] = {
 	"usb_mass_storage",
@@ -361,6 +368,9 @@ static char *usb_functions_adb_diag[] = {
 static char *usb_functions_all[] = {
 #ifdef CONFIG_USB_ANDROID_RNDIS
 	"rndis",
+#endif
+#ifdef CONFIG_USB_ANDROID_ACCESSORY
+	"accessory",
 #endif
 	"usb_mass_storage",
 	"adb",
@@ -393,6 +403,20 @@ static struct android_usb_product usb_products[] = {
 		.num_functions	= ARRAY_SIZE(usb_functions_rndis_adb),
 		.functions	= usb_functions_rndis_adb,
 	},
+#ifdef CONFIG_USB_ANDROID_ACCESSORY
+	{
+		.vendor_id  = USB_ACCESSORY_VENDOR_ID,
+		.product_id  = USB_ACCESSORY_PRODUCT_ID,
+		.num_functions  = ARRAY_SIZE(usb_functions_accessory),
+		.functions  = usb_functions_accessory,
+	},
+	{
+		.vendor_id  = USB_ACCESSORY_VENDOR_ID,
+		.product_id  = USB_ACCESSORY_ADB_PRODUCT_ID,
+		.num_functions  = ARRAY_SIZE(usb_functions_accessory_adb),
+		.functions  = usb_functions_accessory_adb,
+	},
+#endif
 #ifdef CONFIG_USB_ANDROID_DIAG
 	{
 		.product_id	= 0x0c07,
