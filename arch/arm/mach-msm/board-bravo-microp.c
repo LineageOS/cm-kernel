@@ -758,7 +758,12 @@ static ssize_t microp_i2c_led_blink_store(struct device *dev,
 	case 3:
 		mode = val + 1;
 		break;
-
+	case 4:
+		if (ldata->type == AMBER_LED) {
+			mode = val + 1;
+			break;
+		}
+		// else fall through to EINVAL
 	default:
 		mutex_unlock(&ldata->led_data_mutex);
 		return -EINVAL;
