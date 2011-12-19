@@ -8,6 +8,7 @@
 #include <linux/sysrq.h>
 #include <linux/stop_machine.h>
 #include <linux/freezer.h>
+#include <linux/syscore_ops.h>
 
 #include <xen/xen.h>
 #include <xen/xenbus.h>
@@ -91,6 +92,7 @@ static int xen_suspend(void *data)
 		xen_timer_resume();
 	}
 
+	syscore_resume();
 	sysdev_resume();
 
 	return 0;
