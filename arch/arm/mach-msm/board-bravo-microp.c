@@ -960,23 +960,23 @@ static void microp_led_buttons_brightness_set_work(struct work_struct *work)
 	uint8_t data[4] = {0, 0, 0};
 	int ret = 0;
 	enum led_brightness brightness;
-	uint8_t value;
 
 	spin_lock_irqsave(&ldata->brightness_lock, flags);
 	brightness = ldata->brightness;
 	spin_unlock_irqrestore(&ldata->brightness_lock, flags);
 
-	value = brightness >= 255 ? 0xFF : 0;
+	if (brightness > 255)
+		brightness = 255;
 
 	/* avoid a flicker that can occur when writing the same value */
-	if (cdata->button_led_value == value)
+	if (cdata->button_led_value == brightness)
 		return;
-	cdata->button_led_value = value;
+	cdata->button_led_value = brightness;
 
 	/* in 40ms */
 	data[0] = 0x05;
 	/* duty cycle 0-255 */
-	data[1] = value;
+	data[1] = brightness;
 	/* bit2 == change brightness */
 	data[3] = 0x04;
 
