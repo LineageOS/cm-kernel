@@ -1,7 +1,7 @@
 #
 # Automatically generated make config: don't edit
 # Linux/arm 2.6.37.6 Kernel Configuration
-# Wed Jan 11 02:32:39 2012
+# Fri Mar 23 21:37:57 2012
 #
 CONFIG_ARM=y
 CONFIG_SYS_SUPPORTS_APM_EMULATION=y
@@ -1467,6 +1467,7 @@ CONFIG_USB_CSW_HACK=y
 # CONFIG_USB_G_MULTI is not set
 # CONFIG_USB_G_HID is not set
 # CONFIG_USB_G_DBGP is not set
+CONFIG_USB_HTC_SWITCH_STUB=y
 
 #
 # OTG and related infrastructure
