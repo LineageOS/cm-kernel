@@ -1,0 +1,9 @@
+Change-Id: I2a32a61dd57e1047ee37bcc7a2929098264a26c7
+Code-Review+2: Ricardo Cerqueira <cyanogenmod@cerqueira.org>
+Verified+1: Ricardo Cerqueira <cyanogenmod@cerqueira.org>
+Code-Review+1: Serban Zodian
+Submitted-by: Ricardo Cerqueira <cyanogenmod@cerqueira.org>
+Submitted-at: Sun, 10 Jun 2012 04:20:30 +0400
+Reviewed-on: http://review.cyanogenmod.com/15040
+Project: CyanogenMod/cm-kernel
+Branch: refs/heads/android-msm-2.6.37
